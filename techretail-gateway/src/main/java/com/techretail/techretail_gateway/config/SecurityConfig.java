@@ -56,7 +56,7 @@ public class SecurityConfig {
                         .requestMatchers("/api/pagos/**").hasAnyRole(admin, cliente)
                         .requestMatchers("/api/inventario/**").hasAnyRole(admin, empleado)
                         .requestMatchers("/api/monitoreo/**").hasRole(admin)
-                        .requestMatchers("/ws/facturacion").hasAnyRole(admin, empleado)
+                        .requestMatchers("/ws/facturacion", "/ws/facturacion/**").hasAnyRole(admin, empleado)
                         // Recursos que solo exigen estar autenticado.
                         .requestMatchers("/api/clientes/**", "/api/pedidos/**", "/api/notificaciones/**")
                         .authenticated()

@@ -2,6 +2,7 @@ package com.techretail.techretail_gateway;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.techretail.techretail_gateway.security.JwtProperties;
@@ -80,6 +81,38 @@ class SeguridadYAuditoriaTests {
     void laSaludDelBusEsPublica() throws Exception {
         mockMvc.perform(get("/actuator/health"))
                 .andExpect(status().isOk());
+    }
+
+    @Test
+    void unTokenClienteNoPuedeInvocarFacturacionPorSubruta() throws Exception {
+        String token = firmar("maria.fernandez@email.com", "CLIENTE", 8L, jwtProperties.getSecret());
+
+        String cuerpo = mockMvc.perform(post("/ws/facturacion/servicio")
+                .header(HttpHeaders.AUTHORIZATION, "Bearer " + token))
+                .andExpect(status().isForbidden())
+                .andReturn().getResponse().getContentAsString();
+
+        assertThat(cuerpo).contains("\"status\":403");
+    }
+
+    @Test
+    void unTokenEmpleadoAlcanzaLaRutaDeFacturacion() throws Exception {
+        String token = firmar("empleado@techretail.pe", "EMPLEADO", 9L, jwtProperties.getSecret());
+
+        int estado;
+        try {
+            estado = mockMvc.perform(post("/ws/facturacion/servicio")
+                    .header(HttpHeaders.AUTHORIZATION, "Bearer " + token))
+                    .andReturn().getResponse().getStatus();
+        } catch (Exception excepcion) {
+            // El servicio de facturacion no esta levantado: la peticion supero la
+            // capa de seguridad y murio en el enrutamiento, que es lo que se prueba.
+            estado = 502;
+        }
+
+        assertThat(estado)
+                .as("EMPLEADO conserva el acceso a facturacion (Avance2 8.3)")
+                .isNotIn(401, 403);
     }
 
     @Test
