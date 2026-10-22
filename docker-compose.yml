@@ -1,0 +1,31 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: techretail-postgres
+    environment:
+      POSTGRES_USER: techretail
+      POSTGRES_PASSWORD: techretail123
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./docker/postgres-init.sql:/docker-entrypoint-initdb.d/init.sql  # Ejecuta el script al iniciar
+
+  rabbitmq:
+    image: rabbitmq:3-management
+    container_name: techretail-rabbitmq
+    ports:
+      - "5672:5672"    # AMQP (para que los servicios envíen/consuman mensajes)
+      - "15672:15672"  # Panel web administrativo de RabbitMQ
+
+  pgadmin:
+    image: dpage/pgadmin4
+    container_name: techretail-pgadmin
+    environment:
+      PGADMIN_DEFAULT_EMAIL: admin@techretail.com
+      PGADMIN_DEFAULT_PASSWORD: admin
+    ports:
+      - "5050:80"
+
+volumes:
+  pgdata:

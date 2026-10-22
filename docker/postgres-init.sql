@@ -1,0 +1,10 @@
+CREATE DATABASE db_cliente;
+CREATE DATABASE db_producto;
+CREATE DATABASE db_pedido;
+CREATE DATABASE db_pago;
+CREATE DATABASE db_inventario;
+CREATE DATABASE db_notificacion;
+CREATE DATABASE db_facturacion;
+CREATE DATABASE db_autenticacion;
+CREATE DATABASE db_monitoreo;
+CREATE DATABASE db_esb;

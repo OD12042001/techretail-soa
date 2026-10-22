@@ -1,0 +1,28 @@
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema"
+           targetNamespace="http://techretail.com/facturacion"
+           xmlns:fac="http://techretail.com/facturacion"
+           elementFormDefault="qualified">
+
+    <!-- Petición SOAP: FacturaRequest -->
+    <xs:element name="FacturaRequest">
+        <xs:complexType>
+            <xs:sequence>
+                <xs:element name="ruc" type="xs:string"/>
+                <xs:element name="monto" type="xs:decimal"/>
+                <xs:element name="descripcion" type="xs:string"/>
+            </xs:sequence>
+        </xs:complexType>
+    </xs:element>
+
+    <!-- Respuesta SOAP: FacturaResponse -->
+    <xs:element name="FacturaResponse">
+        <xs:complexType>
+            <xs:sequence>
+                <xs:element name="numeroFactura" type="xs:string"/>
+                <xs:element name="estado" type="xs:string"/>
+                <xs:element name="fechaEmision" type="xs:date"/>
+            </xs:sequence>
+        </xs:complexType>
+    </xs:element>
+
+</xs:schema>
