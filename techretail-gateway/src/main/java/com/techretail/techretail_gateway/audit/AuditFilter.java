@@ -5,8 +5,6 @@ import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.springframework.core.Ordered;
 import org.springframework.core.annotation.Order;
 import org.springframework.stereotype.Component;
@@ -18,14 +16,12 @@ import org.springframework.web.filter.OncePerRequestFilter;
  * bypass quede trazado.
  *
  * <p>Se ejecuta antes de la cadena de Spring Security para poder observar el
- * codigo de respuesta final. Un fallo al escribir la auditoria nunca
- * interrumpe la peticion del cliente: se registra en el log de la aplicacion.</p>
+ * codigo de respuesta final. La escritura es asincrona (ver
+ * {@link AuditPublisher}): un fallo o una base lenta nunca interrumpen la peticion.</p>
  */
 @Component
 @Order(Ordered.HIGHEST_PRECEDENCE + 10)
 public class AuditFilter extends OncePerRequestFilter {
-
-    private static final Logger log = LoggerFactory.getLogger(AuditFilter.class);
 
     private static final String SERVICIO_ORIGEN = "GATEWAY";
     private static final String USUARIO_ANONIMO = "anonimo";
@@ -33,11 +29,11 @@ public class AuditFilter extends OncePerRequestFilter {
     private static final int MAX_USUARIO = 100;
     private static final int MAX_DETALLE = 500;
 
-    private final AuditLogRepository repositorio;
+    private final AuditPublisher publicador;
     private final ServiceDestinationResolver resolver;
 
-    public AuditFilter(AuditLogRepository repositorio, ServiceDestinationResolver resolver) {
-        this.repositorio = repositorio;
+    public AuditFilter(AuditPublisher publicador, ServiceDestinationResolver resolver) {
+        this.publicador = publicador;
         this.resolver = resolver;
     }
 
@@ -85,12 +81,8 @@ public class AuditFilter extends OncePerRequestFilter {
                 usuario,
                 truncar(detalle.toString(), MAX_DETALLE));
 
-        try {
-            repositorio.registrar(entrada);
-        } catch (RuntimeException ex) {
-            log.warn("No se pudo registrar la auditoria de {} {}: {}",
-                    entrada.operacion(), entrada.endpoint(), ex.getMessage());
-        }
+        // Escritura asincrona: nunca bloquea ni rompe la respuesta al cliente.
+        publicador.publicar(entrada);
     }
 
     private static String texto(Object valor, String porDefecto) {

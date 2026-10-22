@@ -8,6 +8,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import com.techretail.techretail_gateway.audit.AuditEntry;
 import com.techretail.techretail_gateway.audit.AuditFilter;
+import com.techretail.techretail_gateway.audit.AuditPublisher;
 import com.techretail.techretail_gateway.audit.AuditLogRepository;
 import com.techretail.techretail_gateway.audit.ServiceDestinationResolver;
 import com.techretail.techretail_gateway.security.JwtProperties;
@@ -94,7 +95,7 @@ class SeguridadAuditoriaRegressionTests {
     @Test
     void unFalloDeTransporteSeAuditaComo500() {
         RepositorioEnMemoria repositorio = new RepositorioEnMemoria();
-        AuditFilter filtro = new AuditFilter(repositorio, new ServiceDestinationResolver());
+        AuditFilter filtro = new AuditFilter(new AuditPublisher(repositorio, Runnable::run), new ServiceDestinationResolver());
         MockHttpServletRequest peticion = new MockHttpServletRequest("GET", "/api/clientes/caido");
         MockHttpServletResponse respuesta = new MockHttpServletResponse();
 
@@ -110,7 +111,7 @@ class SeguridadAuditoriaRegressionTests {
     @Test
     void unaTransaccionExitosaConservaSuEstadoReal() throws Exception {
         RepositorioEnMemoria repositorio = new RepositorioEnMemoria();
-        AuditFilter filtro = new AuditFilter(repositorio, new ServiceDestinationResolver());
+        AuditFilter filtro = new AuditFilter(new AuditPublisher(repositorio, Runnable::run), new ServiceDestinationResolver());
         MockHttpServletRequest peticion = new MockHttpServletRequest("GET", "/api/clientes/ok");
         MockHttpServletResponse respuesta = new MockHttpServletResponse();
 

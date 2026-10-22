@@ -121,6 +121,14 @@ class SeguridadYAuditoriaTests {
 
         mockMvc.perform(get(endpoint)).andExpect(status().isUnauthorized());
 
+        // La auditoria es asincrona: se espera a que el evento llegue a db_esb.
+        long limite = System.currentTimeMillis() + 5_000L;
+        while (System.currentTimeMillis() < limite
+                && jdbcTemplate.queryForObject(
+                        "SELECT COUNT(*) FROM auditoria_logs WHERE endpoint = ?", Integer.class, endpoint) == 0) {
+            Thread.sleep(25);
+        }
+
         Map<String, Object> fila = jdbcTemplate.queryForMap("""
                 SELECT servicio_origen, servicio_destino, operacion, estado_respuesta, usuario
                 FROM auditoria_logs

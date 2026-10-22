@@ -1,6 +1,6 @@
 # AGENTS.md
 
-Academic SOA project (TechRetail S.A.): 10 **independent** Spring Boot 4.1.1 / Java 21 Maven projects. Not a multi-module reactor: the root `pom.xml` is empty and there is no root wrapper. Phase 1 is done: every module boots with valid config. The nine domain services are still scaffolding (one `*Application` class, one Flyway `V1`, no entities/controllers); only the gateway has real behaviour so far (routing, JWT enforcement, auditing to `db_esb`).
+Academic SOA project (TechRetail S.A.): 10 **independent** Spring Boot 4.1.1 / Java 21 Maven projects. Not a multi-module reactor: the root `pom.xml` is empty and there is no root wrapper. Phase 1 is done: every module boots with valid config. Phase 2.2 is done: the gateway has real behaviour (routing, JWT enforcement, asynchronous auditing to `db_esb`, `/api/auditoria` endpoints) and `techretail-monitoreo` too (periodic health checks into `monitoreo_logs`, own JWT security). The other eight domain services are still scaffolding (one `*Application` class, one Flyway `V1`, no entities/controllers).
 
 ## Modules
 
@@ -14,7 +14,7 @@ Academic SOA project (TechRetail S.A.): 10 **independent** Spring Boot 4.1.1 / J
 | techretail-notificacion | 8086 | db_notificacion | AMQP |
 | techretail-facturacion-sunat | 8087 | db_facturacion | SOAP contract-first (Spring-WS + jaxb2) |
 | techretail-autenticacion | 8088 | db_autenticacion | Spring Security + jjwt 0.11.5 |
-| techretail-monitoreo | 8089 | db_monitoreo | Actuator |
+| techretail-monitoreo | 8089 | db_monitoreo | Actuator + `@Scheduled` health probes + Spring Security/jjwt 0.11.5 |
 | techretail-gateway | 8090 | db_esb | Gateway WebMVC (servlet) + JdbcTemplate + Spring Security |
 
 ## Commands
@@ -47,7 +47,9 @@ Run from inside a module directory (each has its own `mvnw`):
 - **These are Spring Boot 4 modular starters**: `spring-boot-starter-webmvc`, `spring-boot-starter-*-test`. Don't replace them with `spring-boot-starter-web` / `spring-boot-starter-test` out of habit. Boot 4 also moved test annotations: `@AutoConfigureMockMvc` lives in `org.springframework.boot.webmvc.test.autoconfigure`.
 - **Facturación is contract-first**: edit `src/main/resources/wsdl/facturacion.xsd`; `jaxb2-maven-plugin` **3.1.0** regenerates classes into `target/generated-sources/jaxb`. Version 2.5.0 emits `javax.xml.bind` and no longer compiles against Boot 4 (Jakarta). Never hand-edit generated code.
 - **Gateway is a servlet (WebMVC) service, not reactive.** `spring-boot-starter-webflux`, `data-r2dbc` and `r2dbc-postgresql` are gone on purpose; it talks to `db_esb` with `JdbcTemplate`. Don't reintroduce reactive deps or JPA there.
-- **Security is explicit now.** The gateway enforces stateless JWT (`techretail.security.jwt.*`, HS256, shared `JWT_SECRET` with autenticación) and writes every request to `auditoria_logs`; autenticación has its own `SecurityFilterChain`. `/api/auth/**` is public on purpose; everything else answers 401/403 in JSON. There are no default HTTP Basic credentials to fall back on.
+- **Gateway auditing is asynchronous.** `AuditFilter` hands entries to `AuditPublisher` (bounded `auditExecutor`), so tests that read `auditoria_logs` must wait for the row. The local `/api/auditoria/**` endpoints (ADMIN/EMPLEADO) live outside `/api/monitoreo/**` because the gateway routes that prefix to the monitoreo service before any local controller.
+- **Monitoreo probes** the 9 other services (`techretail.monitoreo.servicios[*]`, URLs overridable via `SERVICIO_<NAME>_URL`) every `MONITOREO_INTERVALO_MS` (30 s). The scheduler is disabled in the `test` profile (`techretail.monitoreo.scheduler.enabled=false`).
+- **Security is explicit now.** The gateway enforces stateless JWT (`techretail.security.jwt.*`, HS256, shared `JWT_SECRET` with autenticación) and writes every request to `auditoria_logs`; autenticación and monitoreo each have their own `SecurityFilterChain` (monitoreo re-validates the JWT and allows only `ADMIN`/`EMPLEADO` on `/api/monitoreo/**`; `/actuator/health` stays public). `/api/auth/**` is public on purpose; everything else answers 401/403 in JSON. There are no default HTTP Basic credentials to fall back on.
 
 ## Docs
 
