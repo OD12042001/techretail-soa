@@ -27,8 +27,9 @@ Branch: `feat/fase1-desbloqueo-modulos` | Delivery: work-unit commits on the fea
 | T2 | S2, S6 | inline | done | gateway POM sin webflux/r2dbc/r2dbc-postgresql; `spring-boot-starter-webmvc` + `gateway-server-webmvc` + `starter-jdbc`; `db_esb` por JDBC; 9 rutas de la tabla de direccionamiento |
 | T3 | S3, S6 | inline | done | `JwtAuthenticationFilter` fail-closed, `SecurityConfig` stateless con reglas de rol, `JwtService` HS256 con `iss` obligatorio y catalogo de roles |
 | T4 | S3, S5 | inline | done | `AuditFilter` (`HIGHEST_PRECEDENCE + 10`) + `AuditLogRepository`; inserta en `auditoria_logs` y aísla fallos de BD |
-| T5 | S3, S6 | inline | done | 7 tests de gateway (401 sin token, 401 firma ajena, 401 cabecera no Bearer, 403 rol sin permiso, health publico, fila de auditoria) + 5 tests de JWT en auth |
-| T6 | S4 | inline | done | 10/10 `BUILD SUCCESS`: gateway 7, autenticacion 6, 8 modulos 1 cada uno (`Tests run: 37, Failures: 0, Errors: 0`) |
+| T5 | S3, S6 | inline | done | 8 tests de gateway (401 sin token, 401 firma ajena, 401 cabecera no Bearer, 403 rol sin permiso, health publico, fila de auditoria) + 7 tests de autenticacion (contrato JWT) |
+| T6 | S4 | inline | done | 10/10 `BUILD SUCCESS`: gateway 8, autenticacion 7, los 8 modulos de dominio 2 cada uno (`Tests run: 31, Failures: 0, Errors: 0`) |
+| T7 | S1 | inline | done | `laConfiguracionDelModuloSeAplica` en los 10 modulos: asserta `server.port`, `spring.application.name` y `spring.flyway.locations` desde el `Environment`; con el bug YAML original esos tres valores eran `null` |
 
 Route declaration: all tasks inline. No parallel writer was launched because the units share one Maven local repository and one test database, so they cannot be verified independently while running together; the parent owns the whole diff.
 
@@ -60,4 +61,5 @@ Route declaration: all tasks inline. No parallel writer was launched because the
 - **L4 (build bug found):** `techretail-facturacion-sunat` could not compile: `jaxb2-maven-plugin` 2.5.0 generated `javax.xml.bind` annotations while Boot 4 ships Jakarta XML Bind. Upgraded to 3.1.0 (XJC Jakarta); generated sources are Jakarta and the module compiles.
 - **L5 (scope):** Gateway keeps enforcement + audit + routing. Login/registro endpoints (`/api/auth/login`, `/api/auth/registro`), the UDDI catalog controller, per-module `spring-boot-starter-validation` and the missing AMQP starter in `techretail-pago` stay for Phase 2/3.
 - **L6 (hardening notes for Phase 3):** `POST /api/registro/servicios` (UDDI publish) currently requires authentication but no ADMIN role, because services are supposed to self-register without a token; decide between a service key and ADMIN-only publish. Rate limiting, CORS policy and per-endpoint `@PreAuthorize` in the domain services are still open.
-- **L7 (verification):** `techretail-gateway` 7/7, `techretail-autenticacion` 6/6, the remaining 8 modules 1/1 each, all `BUILD SUCCESS`. Total 37 tests, 0 failures.
+- **L7 (verification):** `techretail-gateway` 8/8, `techretail-autenticacion` 7/7, the remaining 8 modules 2/2 each, all `BUILD SUCCESS`. Total 31 tests, 0 failures.
+- **L8 (why the green tests prove S1):** the H2 profile only overrides `spring.datasource.*`, so every test also asserts `server.port`, `spring.application.name` and `spring.flyway.locations` from the real `application.properties`. With the original YAML content Spring exposed none of them and those assertions would be null, so the suite is a real regression guard for the config bug, not just a boot check.
