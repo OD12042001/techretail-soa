@@ -56,6 +56,11 @@ public class JwtService {
                 return Optional.empty();
             }
 
+            // Un JWT sin exp vivio para siempre: se rechaza aunque la firma sea valida.
+            if (claims.getExpiration() == null) {
+                return Optional.empty();
+            }
+
             Object rolClaim = claims.get(JwtClaims.ROL);
             Optional<Rol> rol = Rol.desde(rolClaim instanceof String valor ? valor : null);
             if (rol.isEmpty()) {

@@ -50,15 +50,20 @@ public class AuditFilter extends OncePerRequestFilter {
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain chain)
             throws ServletException, IOException {
         long inicio = System.nanoTime();
+        boolean fallo = false;
         try {
             chain.doFilter(request, response);
+        } catch (ServletException | IOException | RuntimeException ex) {
+            // La cadena no llego a fijar un estado: la transaccion termino en 500.
+            fallo = true;
+            throw ex;
         } finally {
             long duracionMs = (System.nanoTime() - inicio) / 1_000_000L;
-            registrar(request, response, duracionMs);
+            registrar(request, response, duracionMs, fallo);
         }
     }
 
-    private void registrar(HttpServletRequest request, HttpServletResponse response, long duracionMs) {
+    private void registrar(HttpServletRequest request, HttpServletResponse response, long duracionMs, boolean fallo) {
         String endpoint = truncar(request.getRequestURI(), MAX_ENDPOINT);
         String usuario = truncar(texto(request.getAttribute(AuditContext.USUARIO), USUARIO_ANONIMO), MAX_USUARIO);
 
@@ -76,7 +81,7 @@ public class AuditFilter extends OncePerRequestFilter {
                 resolver.resolver(endpoint),
                 truncar(request.getMethod(), 10),
                 endpoint,
-                response.getStatus(),
+                fallo ? 500 : response.getStatus(),
                 usuario,
                 truncar(detalle.toString(), MAX_DETALLE));
 

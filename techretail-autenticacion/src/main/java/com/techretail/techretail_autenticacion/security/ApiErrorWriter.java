@@ -26,6 +26,8 @@ final class ApiErrorWriter {
         response.setContentType(MediaType.APPLICATION_JSON_VALUE);
         response.setCharacterEncoding(StandardCharsets.UTF_8.name());
         response.setHeader(HttpHeaders.CACHE_CONTROL, "no-store");
+        response.setHeader("X-Content-Type-Options", "nosniff");
+        response.setHeader("X-Frame-Options", "DENY");
         response.getWriter().write("{\"status\":%d,\"error\":\"%s\",\"message\":\"%s\"}"
                 .formatted(status.value(), status.getReasonPhrase(), mensaje));
     }
