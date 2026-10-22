@@ -1,6 +1,6 @@
 # AGENTS.md
 
-Academic SOA project (TechRetail S.A.): 10 **independent** Spring Boot 4.1.1 / Java 21 Maven projects. Not a multi-module reactor: the root `pom.xml` is empty and there is no root wrapper. All 10 services are still scaffolding — one `*Application` class, one Flyway `V1` migration, no entities/controllers.
+Academic SOA project (TechRetail S.A.): 10 **independent** Spring Boot 4.1.1 / Java 21 Maven projects. Not a multi-module reactor: the root `pom.xml` is empty and there is no root wrapper. Phase 1 is done: every module boots with valid config. The nine domain services are still scaffolding (one `*Application` class, one Flyway `V1`, no entities/controllers); only the gateway has real behaviour so far (routing, JWT enforcement, auditing to `db_esb`).
 
 ## Modules
 
@@ -15,7 +15,7 @@ Academic SOA project (TechRetail S.A.): 10 **independent** Spring Boot 4.1.1 / J
 | techretail-facturacion-sunat | 8087 | db_facturacion | SOAP contract-first (Spring-WS + jaxb2) |
 | techretail-autenticacion | 8088 | db_autenticacion | Spring Security + jjwt 0.11.5 |
 | techretail-monitoreo | 8089 | db_monitoreo | Actuator |
-| techretail-gateway | 8090 | db_esb | WebFlux + R2DBC + Spring Cloud Gateway (ESB) |
+| techretail-gateway | 8090 | db_esb | Gateway WebMVC (servlet) + JdbcTemplate + Spring Security |
 
 ## Commands
 
@@ -30,25 +30,24 @@ Run from inside a module directory (each has its own `mvnw`):
 
 - `mvn`/`mvnw` at the repo root does nothing (empty POM, no wrapper). Always `cd` into the module first.
 - No lint, formatter, typecheck, CI, or pre-commit hook exists in this repo. `test` is the only verification gate.
-- Repository is not a Git repo; don't rely on `git diff`/history.
+- The repo **is** a Git repo (`main` + feature branches). Each module has its own `.gitignore` that excludes `target/`.
 
 ## Before running anything
 
 1. Start infra from the repo root: `docker compose up -d postgres rabbitmq` (pgAdmin on :5050, RabbitMQ UI on :15672).
 2. `docker/postgres-init.sql` creates all 10 databases **only on first volume creation**. If you add/rename a DB, use `docker compose down -v` then `up` again, or create it manually.
-3. Tests are plain `@SpringBootTest` with **no test profile and no H2**; Flyway is enabled, so a module's test needs its real Postgres DB reachable. There are no unit-test-only suites.
-4. Committed credentials: `techretail` / `techretail123`, localhost:5432. Local dev only.
+3. Tests run with the `test` profile (`src/test/resources/application-test.properties`): **H2 in memory with `MODE=PostgreSQL`**, Flyway still applies the real migrations. So `.\mvnw.cmd test` needs no Docker and no database. `spring-boot:run` still uses the real PostgreSQL from `application.properties`.
+4. Committed credentials: `techretail` / `techretail123`, localhost:5432. Local dev only. Every datasource value is a placeholder (`${DB_HOST:localhost}`, `${DB_PORT:5432}`, `${DB_USER:...}`, `${DB_PASSWORD:...}`), so an external DB overrides them by environment variable.
 
 ## Critical gotchas
 
-- **Every `src/main/resources/application.properties` actually contains YAML.** Spring parses them as `.properties`, so `server.port`, `spring.datasource.*` and `spring.flyway.*` are all ignored. Verified: `mvnw test` fails with `Failed to determine a suitable driver class`. Fix by converting the file to real properties or renaming it to `application.yml` (snakeyaml is on the classpath). Never append YAML to a `.properties` file.
-- **Flyway owns the schema.** `ddl-auto: validate` is set in every service, so JPA entities must match the migrations or startup fails. Add `V2__*.sql`; never edit an already-applied `V1`.
+- **Configs are real `.properties` again.** They used to contain YAML (Spring ignored `server.port`, `spring.datasource.*` and `spring.flyway.*`, and `mvnw test` failed with `Failed to determine a suitable driver class`). Keep new keys in properties syntax; never append YAML to a `.properties` file.
+- **Flyway owns the schema.** `spring.jpa.hibernate.ddl-auto=validate` is set in every service, so JPA entities must match the migrations or startup fails. Add `V2__*.sql`; never edit an already-applied `V1`.
 - **Packages are `com.techretail.techretail_<service>` with an underscore** (Spring Initializr artifact; see each `HELP.md`). Keep that convention and nest new packages under it; don't "fix" the name.
-- **These are Spring Boot 4 modular starters**: `spring-boot-starter-webmvc`, `spring-boot-starter-*-test`. Don't replace them with `spring-boot-starter-web` / `spring-boot-starter-test` out of habit.
-- **Facturación is contract-first**: edit `src/main/resources/wsdl/facturacion.xsd`; `jaxb2-maven-plugin` regenerates classes into `target/generated-sources/jaxb`. Never hand-edit generated code.
-- **Gateway uses R2DBC only**, but Flyway needs JDBC. Configure `spring.flyway.url` (or a JDBC datasource) before enabling migrations there.
-- **Autenticación has Spring Security on the classpath with no `SecurityFilterChain`**, so every endpoint is protected by HTTP Basic with a generated password until security config is added.
-- The gateway POM mixes `spring-cloud-starter-gateway-server-webmvc` with WebFlux/R2DBC; keep gateway code non-blocking and don't add JPA there.
+- **These are Spring Boot 4 modular starters**: `spring-boot-starter-webmvc`, `spring-boot-starter-*-test`. Don't replace them with `spring-boot-starter-web` / `spring-boot-starter-test` out of habit. Boot 4 also moved test annotations: `@AutoConfigureMockMvc` lives in `org.springframework.boot.webmvc.test.autoconfigure`.
+- **Facturación is contract-first**: edit `src/main/resources/wsdl/facturacion.xsd`; `jaxb2-maven-plugin` **3.1.0** regenerates classes into `target/generated-sources/jaxb`. Version 2.5.0 emits `javax.xml.bind` and no longer compiles against Boot 4 (Jakarta). Never hand-edit generated code.
+- **Gateway is a servlet (WebMVC) service, not reactive.** `spring-boot-starter-webflux`, `data-r2dbc` and `r2dbc-postgresql` are gone on purpose; it talks to `db_esb` with `JdbcTemplate`. Don't reintroduce reactive deps or JPA there.
+- **Security is explicit now.** The gateway enforces stateless JWT (`techretail.security.jwt.*`, HS256, shared `JWT_SECRET` with autenticación) and writes every request to `auditoria_logs`; autenticación has its own `SecurityFilterChain`. `/api/auth/**` is public on purpose; everything else answers 401/403 in JSON. There are no default HTTP Basic credentials to fall back on.
 
 ## Docs
 
