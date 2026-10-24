@@ -45,6 +45,11 @@ public class ProductoService {
                 .map(c -> new CategoriaResponse(c.getId(), c.getNombre(), c.getDescripcion())).toList();
     }
 
+    public CategoriaResponse crearCategoria(CategoriaRequest peticion) {
+        Categoria categoria = categorias.save(new Categoria(peticion.nombre().trim(), peticion.descripcion()));
+        return new CategoriaResponse(categoria.getId(), categoria.getNombre(), categoria.getDescripcion());
+    }
+
     public ProductoResponse crear(ProductoRequest peticion) {
         Categoria categoria = categoria(peticion.idCategoria());
         Producto producto = new Producto(categoria, peticion.nombre(), peticion.descripcion(), peticion.precio(),

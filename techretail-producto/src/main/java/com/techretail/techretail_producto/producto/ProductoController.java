@@ -3,6 +3,7 @@ package com.techretail.techretail_producto.producto;
 import jakarta.validation.Valid;
 import java.net.URI;
 import java.util.List;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -39,6 +40,11 @@ public class ProductoController {
     @GetMapping("/categorias")
     public List<CategoriaResponse> categorias() {
         return servicio.categorias();
+    }
+
+    @PostMapping("/categorias")
+    public ResponseEntity<CategoriaResponse> crearCategoria(@Valid @RequestBody CategoriaRequest peticion) {
+        return ResponseEntity.status(HttpStatus.CREATED).body(servicio.crearCategoria(peticion));
     }
 
     @GetMapping("/{id}")
