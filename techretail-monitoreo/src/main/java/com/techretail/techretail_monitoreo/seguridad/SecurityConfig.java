@@ -30,6 +30,9 @@ public class SecurityConfig {
                 .sessionManagement(sesion -> sesion.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .headers(cabeceras -> cabeceras.frameOptions(marco -> marco.deny()))
                 .authorizeHttpRequests(autorizacion -> autorizacion
+                        // El error dispatch interno (sendError -> /error) no atraviesa el
+                        // filtro JWT; sin esta excepcion un 400/404 real se respondia como 401.
+                        .requestMatchers("/error").permitAll()
                         .requestMatchers("/actuator/health", "/actuator/info").permitAll()
                         .requestMatchers("/api/monitoreo/**")
                         .hasAnyRole(Rol.ADMIN.name(), Rol.EMPLEADO.name())
