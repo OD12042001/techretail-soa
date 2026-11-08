@@ -18,6 +18,18 @@ services:
       - "5672:5672"    # AMQP (para que los servicios envíen/consuman mensajes)
       - "15672:15672"  # Panel web administrativo de RabbitMQ
 
+  jaeger:
+    image: jaegertracing/all-in-one:1.62.0
+    container_name: techretail-jaeger
+    environment:
+      COLLECTOR_OTLP_ENABLED: "true"
+    ports:
+      - "16686:16686"  # UI web de Jaeger (consulta de trazas)
+      - "4318:4318"    # OTLP/HTTP: los microservicios exportan las trazas aquí
+      - "4317:4317"    # OTLP/gRPC (mismo collector, transporte alternativo)
+    # Almacenamiento en memoria: suficiente para la demostración; al reiniciar
+    # el contenedor se pierden las trazas.
+
   pgadmin:
     image: dpage/pgadmin4
     container_name: techretail-pgadmin
