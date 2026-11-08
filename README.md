@@ -67,15 +67,19 @@ cd techretail-soa
 Desde la raíz del repositorio:
 
 ```bash
-docker compose up -d postgres rabbitmq
+docker compose up -d postgres rabbitmq jaeger
 ```
 
 | Servicio | URL / puerto | Credenciales |
 |---|---|---|
-| PostgreSQL | `localhost:5432` | `techretail` / `techretail123` |
+| PostgreSQL | `localhost:5433` | `techretail` / `techretail123` |
 | RabbitMQ (AMQP) | `localhost:5672` | `guest` / `guest` |
 | RabbitMQ (panel) | http://localhost:15672 | `guest` / `guest` |
+| Jaeger (UI de trazas) | http://localhost:16686 | — |
 | pgAdmin (opcional: `docker compose up -d pgadmin`) | http://localhost:5050 | `admin@techretail.com` / `admin` |
+
+> [!NOTE]
+> El contenedor publica PostgreSQL en el puerto **5433** (`5433:5432`) porque el 5432 lo ocupa una instalación nativa de PostgreSQL 18; el proyecto corre aislado sin detenerla. Los `application.properties` usan `${DB_PORT:5433}`.
 
 > [!NOTE]
 > `docker/postgres-init.sql` crea las 10 bases de datos **solo la primera vez** que se crea el volumen. Si añades o renombras una base de datos, ejecuta `docker compose down -v` y vuelve a levantar, o créala manualmente.
@@ -87,7 +91,7 @@ La configuración está en `src/main/resources/application.properties` de cada m
 | Variable | Por defecto | Usada por | Descripción |
 |---|---|---|---|
 | `DB_HOST` | `localhost` | todos | Host de PostgreSQL |
-| `DB_PORT` | `5432` | todos | Puerto de PostgreSQL |
+| `DB_PORT` | `5433` | todos | Puerto de PostgreSQL (el contenedor publica 5433 en el host) |
 | `DB_USER` | `techretail` | todos | Usuario de la base de datos |
 | `DB_PASSWORD` | `techretail123` | todos | Contraseña de la base de datos |
 | `JWT_SECRET` | secreto de desarrollo | autenticación, gateway, monitoreo, producto | Clave HS256, **mínimo 32 bytes**. **Debe ser idéntica en todos los módulos** |

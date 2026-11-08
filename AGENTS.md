@@ -34,10 +34,10 @@ Run from inside a module directory (each has its own `mvnw`):
 
 ## Before running anything
 
-1. Start infra from the repo root: `docker compose up -d postgres rabbitmq` (pgAdmin on :5050, RabbitMQ UI on :15672).
+1. Start infra from the repo root: `docker compose up -d postgres rabbitmq jaeger` (PostgreSQL on host :5433, pgAdmin on :5050, RabbitMQ UI on :15672, Jaeger UI on :16686).
 2. `docker/postgres-init.sql` creates all 10 databases **only on first volume creation**. If you add/rename a DB, use `docker compose down -v` then `up` again, or create it manually.
 3. Tests run with the `test` profile (`src/test/resources/application-test.properties`): **H2 in memory with `MODE=PostgreSQL`**, Flyway still applies the real migrations. So `.\mvnw.cmd test` needs no Docker and no database. `spring-boot:run` still uses the real PostgreSQL from `application.properties`.
-4. Committed credentials: `techretail` / `techretail123`, localhost:5432. Local dev only. Every datasource value is a placeholder (`${DB_HOST:localhost}`, `${DB_PORT:5432}`, `${DB_USER:...}`, `${DB_PASSWORD:...}`), so an external DB overrides them by environment variable.
+4. Committed credentials: `techretail` / `techretail123`, localhost:**5433**. Local dev only. The Docker container publishes `5433:5432` because port 5432 is held by the machine's native PostgreSQL 18; never stop it. Every datasource value is a placeholder (`${DB_HOST:localhost}`, `${DB_PORT:5433}`, `${DB_USER:...}`, `${DB_PASSWORD:...}`), so an external DB overrides them by environment variable.
 
 ## Critical gotchas
 
