@@ -1,0 +1,615 @@
+{
+  "info": {
+    "name": "TechRetail SOA - Avance 3",
+    "description": "Pruebas manuales del Avance 3 ejecutadas contra el BUS (http://localhost:8090). Cubre autenticacion, catalogo (GET/POST/PUT), monitoreo, auditoria y los controles de seguridad. Ejecutar en orden: P1 y P8a guardan los tokens en variables de coleccion, y P9 guarda el id del producto creado.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "baseUrl", "value": "http://localhost:8090" },
+    { "key": "adminToken", "value": "" },
+    { "key": "clienteToken", "value": "" },
+    { "key": "productoId", "value": "4" }
+  ],
+  "item": [
+    {
+      "name": "01 Autenticacion",
+      "item": [
+        {
+          "name": "P1 - Login ADMIN",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 y rol ADMIN', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "    pm.expect(pm.response.json().rol).to.eql('ADMIN');",
+                  "});",
+                  "pm.collectionVariables.set('adminToken', pm.response.json().token);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"usuario\":\"admin@techretail.pe\",\"password\":\"Admin123!\"}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/login",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "auth", "login"]
+            },
+            "description": "Login del usuario ADMIN de demostracion. Guarda el token en la variable adminToken."
+          }
+        },
+        {
+          "name": "P2 - Login credenciales invalidas",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('401 sin filtrar detalles', function () {",
+                  "    pm.response.to.have.status(401);",
+                  "    pm.expect(pm.response.json().message).to.eql('Credenciales invalidas');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"usuario\":\"admin@techretail.pe\",\"password\":\"incorrecta\"}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/login",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "auth", "login"]
+            }
+          }
+        },
+        {
+          "name": "P3 - Registro de cliente",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('201 con rol CLIENTE', function () {",
+                  "    pm.response.to.have.status(201);",
+                  "    pm.expect(pm.response.json().rol).to.eql('CLIENTE');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"usuario\":\"qa.avance3@techretail.pe\",\"password\":\"Cliente123!\",\"nombre\":\"QA Avance 3\"}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/registro",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "auth", "registro"]
+            },
+            "description": "El registro publico solo crea usuarios CLIENTE. Si el usuario ya existe, la respuesta es 409."
+          }
+        },
+        {
+          "name": "P8a - Login CLIENTE",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 y rol CLIENTE', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "    pm.expect(pm.response.json().rol).to.eql('CLIENTE');",
+                  "});",
+                  "pm.collectionVariables.set('clienteToken', pm.response.json().token);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"usuario\":\"cliente@techretail.pe\",\"password\":\"Cliente123!\"}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/login",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "auth", "login"]
+            },
+            "description": "Token CLIENTE para el caso P8b."
+          }
+        }
+      ]
+    },
+    {
+      "name": "02 Catalogo de productos",
+      "item": [
+        {
+          "name": "P4 - Catalogo publico",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 con lista', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "    pm.expect(pm.response.json()).to.be.an('array');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/productos",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "productos"]
+            },
+            "description": "Lectura publica: no requiere token."
+          }
+        },
+        {
+          "name": "P5 - Catalogo filtrado",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": ["pm.test('200', function () { pm.response.to.have.status(200); });"]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/productos?q=monitor&soloDisponibles=true",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "productos"],
+              "query": [
+                { "key": "q", "value": "monitor" },
+                { "key": "soloDisponibles", "value": "true" }
+              ]
+            }
+          }
+        },
+        {
+          "name": "P6 - Detalle inexistente",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": ["pm.test('404', function () { pm.response.to.have.status(404); });"]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/productos/999999",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "productos", "999999"]
+            }
+          }
+        },
+        {
+          "name": "P7 - Escritura sin token",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": ["pm.test('401', function () { pm.response.to.have.status(401); });"]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"nombre\":\"Producto no autorizado\",\"descripcion\":\"sin token\",\"precio\":10.00,\"idCategoria\":1,\"stockReferencial\":1}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/productos",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "productos"]
+            },
+            "description": "El BUS rechaza antes de enrutar: el servicio de producto no recibe la peticion."
+          }
+        },
+        {
+          "name": "P8b - Escritura con rol CLIENTE",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": ["pm.test('403', function () { pm.response.to.have.status(403); });"]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{clienteToken}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"nombre\":\"Producto de cliente\",\"descripcion\":\"rol CLIENTE\",\"precio\":10.00,\"idCategoria\":1,\"stockReferencial\":1}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/productos",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "productos"]
+            },
+            "description": "Token valido pero rol insuficiente: 403, no 401."
+          }
+        },
+        {
+          "name": "P9 - Crear producto",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('201 con Location', function () {",
+                  "    pm.response.to.have.status(201);",
+                  "    pm.expect(pm.response.headers.has('Location')).to.be.true;",
+                  "});",
+                  "pm.collectionVariables.set('productoId', pm.response.json().id);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{adminToken}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"nombre\":\"Teclado Mecanico Keychron K8 Pro\",\"descripcion\":\"TKL, switches Gateron Brown, inalambrico\",\"precio\":549.90,\"idCategoria\":3,\"stockReferencial\":25}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/productos",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "productos"]
+            },
+            "description": "Guarda el id creado en la variable productoId para P10 y P11."
+          }
+        },
+        {
+          "name": "P10 - Actualizar producto",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": ["pm.test('200 con el precio nuevo', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "    pm.expect(pm.response.json().precio).to.eql(499.90);",
+                  "});"]
+              }
+            }
+          ],
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{adminToken}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"nombre\":\"Teclado Mecanico Keychron K8 Pro\",\"descripcion\":\"TKL, switches Gateron Brown, inalambrico\",\"precio\":499.90,\"idCategoria\":3,\"stockReferencial\":20}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/productos/{{productoId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "productos", "{{productoId}}"]
+            }
+          }
+        },
+        {
+          "name": "P11 - Retiro logico",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": ["pm.test('200 con disponible false', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "    pm.expect(pm.response.json().disponible).to.be.false;",
+                  "});"]
+              }
+            }
+          ],
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{adminToken}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"nombre\":\"Teclado Mecanico Keychron K8 Pro\",\"descripcion\":\"TKL, switches Gateron Brown, inalambrico\",\"precio\":499.90,\"idCategoria\":3,\"stockReferencial\":20,\"disponible\":false}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/productos/{{productoId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "productos", "{{productoId}}"]
+            },
+            "description": "No hay DELETE: la baja es logica. Despues de este PUT, el producto no aparece en P5."
+          }
+        },
+        {
+          "name": "P12 - Validacion de entrada",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": ["pm.test('400', function () { pm.response.to.have.status(400); });"]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{adminToken}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"nombre\":\"Precio invalido\",\"descripcion\":\"precio negativo\",\"precio\":-5,\"idCategoria\":1,\"stockReferencial\":1}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/productos",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "productos"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "03 Monitoreo",
+      "item": [
+        {
+          "name": "P13 - Estado de servicios",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": ["pm.test('200 con 9 servicios', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "    pm.expect(pm.response.json().length).to.eql(9);",
+                  "});"]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{adminToken}}" }],
+            "url": {
+              "raw": "{{baseUrl}}/api/monitoreo/estado",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "monitoreo", "estado"]
+            }
+          }
+        },
+        {
+          "name": "P13b - Historial de monitoreo",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": ["pm.test('200', function () { pm.response.to.have.status(200); });"]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{adminToken}}" }],
+            "url": {
+              "raw": "{{baseUrl}}/api/monitoreo/historial?limite=5",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "monitoreo", "historial"],
+              "query": [{ "key": "limite", "value": "5" }]
+            }
+          }
+        },
+        {
+          "name": "P14 - Historial con limite invalido",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": ["pm.test('400 y no 401', function () { pm.response.to.have.status(400); });"]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{adminToken}}" }],
+            "url": {
+              "raw": "{{baseUrl}}/api/monitoreo/historial?limite=0",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "monitoreo", "historial"],
+              "query": [{ "key": "limite", "value": "0" }]
+            },
+            "description": "Regresion: antes de la correccion del error dispatch respondia 401."
+          }
+        }
+      ]
+    },
+    {
+      "name": "04 Auditoria",
+      "item": [
+        {
+          "name": "P15 - Auditoria del BUS",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": ["pm.test('200', function () { pm.response.to.have.status(200); });"]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{adminToken}}" }],
+            "url": {
+              "raw": "{{baseUrl}}/api/auditoria?limite=5",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "auditoria"],
+              "query": [{ "key": "limite", "value": "5" }]
+            }
+          }
+        },
+        {
+          "name": "P16 - Resumen de auditoria",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": ["pm.test('200 con total y errores', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "    pm.expect(pm.response.json()).to.have.property('total');",
+                  "    pm.expect(pm.response.json()).to.have.property('errores');",
+                  "});"]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{adminToken}}" }],
+            "url": {
+              "raw": "{{baseUrl}}/api/auditoria/resumen",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "auditoria", "resumen"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "05 Seguridad",
+      "item": [
+        {
+          "name": "P17 - Token alterado",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": ["pm.test('401', function () { pm.response.to.have.status(401); });"]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{adminToken}}firma_alterada" }],
+            "url": {
+              "raw": "{{baseUrl}}/api/productos/1",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "productos", "1"]
+            },
+            "description": "La firma ya no valida: el BUS responde 401 y el servicio destino no recibe la peticion."
+          }
+        },
+        {
+          "name": "P18a - Acceso directo (lectura publica)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": ["pm.test('200', function () { pm.response.to.have.status(200); });"]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "http://localhost:8082/api/productos",
+              "host": ["http://localhost:8082"],
+              "path": ["api", "productos"]
+            },
+            "description": "Segunda capa de seguridad: el servicio de producto responde igual sin pasar por el BUS."
+          }
+        },
+        {
+          "name": "P18b - Acceso directo (escritura sin token)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": ["pm.test('401', function () { pm.response.to.have.status(401); });"]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"nombre\":\"Directo sin token\",\"descripcion\":\"x\",\"precio\":10.00,\"idCategoria\":1,\"stockReferencial\":1}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "http://localhost:8082/api/productos",
+              "host": ["http://localhost:8082"],
+              "path": ["api", "productos"]
+            }
+          }
+        }
+      ]
+    }
+  ]
+}
