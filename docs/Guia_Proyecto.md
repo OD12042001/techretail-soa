@@ -281,7 +281,253 @@ Invoke-RestMethod -Uri http://localhost:8090/api/monitoreo/estado `
 Abre http://localhost:16686 en el navegador, elige `techretail-gateway` en el desplegable **Service** y pulsa **Find Traces**. Cada resultado muestra por qué servicios pasó una petición y cuánto tardó en cada uno.
 
 > [!TIP]
-> ¿Prefieres Postman? Importa la colección `docs/postman_collection/techretail-avance3.json`. Trae preparadas las peticiones principales (login, catálogo, creación de productos, monitoreo y auditoría) y además casos de error, como un token alterado o una escritura sin permiso.
+> ¿Prefieres Postman? Salta a [Paso 5 alternativa — Prueba con Postman](#paso-5-alternativa--prueba-con-postman): importas la colección completa `docs/postman_collection/techretail-completa.json` y recorres los mismos casos con clics.
+
+### Paso 5 alternativa — Prueba con Postman
+
+Si prefieres una ventana con botones en vez de escribir comandos, esta sección es para ti. Postman es una aplicación gratuita que guarda tus peticiones HTTP y te deja repetirlas con un clic.
+
+Todo lo que viene apunta al **Gateway**, en `http://localhost:8090`. Ese es el punto único de entrada: si algo funciona contra el Gateway, funciona en el proyecto.
+
+#### 5A.1 — Importa la colección
+
+Una **colección** es una carpeta de peticiones ya escritas. La nuestra está en `docs/postman_collection/`.
+
+1. Abre Postman (descárgalo de `postman.com/downloads` o usa la versión web).
+2. Si te ofrece crear una cuenta, puedes saltarlo con **Continue without an account**.
+3. Arriba a la izquierda, haz clic en **Import**.
+4. Arrastra el archivo `techretail-completa.json` a la ventana (o usa **files** para buscarlo).
+5. Haz clic en **Import**.
+6. En la barra lateral izquierda, dentro de **Collections**, aparece **TechRetail SOA - Completa**. Haz clic para desplegarla.
+
+#### 5A.2 — Conoce la pantalla antes de tocar nada
+
+| Zona | Qué es |
+|---|---|
+| Barra lateral izquierda | La colección y sus carpetas: `01 Autenticacion`, `02 Catalogo de productos`, `03 Monitoreo`, `04 Auditoria`, `05 Seguridad` |
+| Arriba al centro | El método (`GET`, `POST`, `PUT`), la URL y el botón azul **Send** |
+| Debajo de la URL | Las pestañas de la petición: **Params**, **Authorization**, **Headers**, **Body**, **Scripts**, **Settings** |
+| Panel derecho | La respuesta: código de estado, tiempo, y las pestañas **Body**, **Cookies**, **Headers**, **Test Results** |
+
+**Regla de oro para leer un error:**
+
+| Código | Qué significa | Dónde mirar |
+|---|---|---|
+| **401** | No sé quién eres | Falta el token, está vencido o mal pegado |
+| **403** | Sé quién eres, pero no puedes | Tu rol no alcanza para esa ruta |
+| **400** | Tu petición está mal armada | El body o un parámetro |
+| **404** | Esa URL o ese id no existe | La ruta o el `{id}` |
+| **409** | Ese dato ya existe | El usuario que intentas registrar |
+
+#### 5A.3 — Las variables: el cajón donde se guarda el token
+
+La colección usa **variables** para no repetir datos. Cuando ves `{{baseUrl}}` o `{{adminToken}}`, Postman los reemplaza por su valor al enviar.
+
+1. Haz clic en el **nombre de la colección** (no en una petición).
+2. Se abre una vista con las pestañas **Overview**, **Authorization**, **Scripts**, **Variables**.
+3. Haz clic en **Variables**.
+
+| Variable | Valor inicial | Para qué |
+|---|---|---|
+| `baseUrl` | `http://localhost:8090` | La dirección del Gateway |
+| `adminToken` | *(vacío)* | Token del usuario ADMIN |
+| `empleadoToken` | *(vacío)* | Token del usuario EMPLEADO |
+| `clienteToken` | *(vacío)* | Token del usuario CLIENTE |
+| `productoId` | `4` | Id del producto que crees |
+| `categoriaId` | `1` | Id de una categoría existente |
+
+> [!IMPORTANT]
+> Si una variable queda vacía, la cabecera se envía como `Bearer ` y el Gateway responde **401**. Antes de culpar al código, mira esta tabla.
+
+#### 5A.4 — Tu primera petición: un GET público
+
+Las peticiones públicas **no llevan token**. El Gateway las deja pasar sin mirar credenciales.
+
+1. Despliega `02 Catalogo de productos` y haz clic en **P4 - Catalogo publico**.
+2. Verifica arriba: método **GET** y URL `{{baseUrl}}/api/productos`.
+3. Ve a la pestaña **Authorization** y confirma que dice **No Auth**. Si dice otra cosa, cámbiala a **No Auth**.
+4. Pulsa **Send**.
+5. En el panel derecho verás **200 OK** y una lista JSON.
+
+```json
+[
+  {
+    "id": 1,
+    "nombre": "Mouse Gamer RGB",
+    "descripcion": "16000 DPI",
+    "precio": 89.90,
+    "idCategoria": 1,
+    "categoria": "Laptops",
+    "stockReferencial": 25,
+    "disponible": true,
+    "fechaCreacion": "2026-05-10T18:22:31"
+  }
+]
+```
+
+> [!NOTE]
+> Un **GET** no lleva body: la pestaña **Body** queda en **none**. El body es para `POST` y `PUT`.
+
+Prueba también **P5** (con filtros `?q=monitor&soloDisponibles=true`) y la ruta pública de categorías: `{{baseUrl}}/api/productos/categorias` devuelve las 5 categorías cargadas de serie.
+
+#### 5A.5 — El login: un POST público que devuelve el token
+
+1. Despliega `01 Autenticacion` y abre **P1 - Login ADMIN**.
+2. Arriba: método **POST**, URL `{{baseUrl}}/api/auth/login`.
+3. Pestaña **Body** → marca el círculo **raw** → en el desplegable de la derecha elige **JSON**.
+4. Escribe el cuerpo:
+
+```json
+{
+  "usuario": "admin@techretail.pe",
+  "password": "Admin123!"
+}
+```
+
+5. Pulsa **Send**. Debes ver **200 OK**:
+
+```json
+{
+  "token": "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJhZG1pbi...",
+  "tipo": "Bearer",
+  "expiraEn": 3600,
+  "rol": "ADMIN",
+  "idUsuario": 1,
+  "nombre": "Administrador TechRetail"
+}
+```
+
+`expiraEn` son **segundos**: 3600 = 60 minutos de vida. Pasado ese tiempo, el token deja de servir y hay que repetir el login.
+
+#### 5A.6 — Guarda el token automáticamente
+
+No hace falta copiar y pegar. La petición **P1** ya trae un script que lo hace:
+
+1. Con **P1** abierta, ve a la pestaña **Scripts**.
+2. Haz clic en **Post-response** (en versiones anteriores se llama **Tests**).
+3. Verás esta línea:
+
+```javascript
+pm.collectionVariables.set('adminToken', pm.response.json().token);
+```
+
+Se lee así: *"guarda en la variable `adminToken` el campo `token` de la respuesta"*. Se ejecuta solo después de cada **Send**.
+
+**Alternativa manual** (útil para entender qué pasa): selecciona el valor de `token` **sin las comillas**, ve a la colección → **Variables**, pégalo en `adminToken` y guarda con `Ctrl + S`.
+
+> [!TIP]
+> Para comprobar que el token viaja de verdad, abre la **Console** (abajo a la izquierda, icono de terminal) y mira la petición enviada: debe aparecer `Authorization: Bearer eyJ...`.
+
+#### 5A.7 — Un POST privado: crear un producto (solo ADMIN)
+
+1. Abre **P9 - Crear producto**.
+2. Arriba: método **POST**, URL `{{baseUrl}}/api/productos`.
+3. Pestaña **Authorization** → en **Type** elige **Bearer Token**.
+4. En el campo **Token** escribe exactamente:
+
+```text
+{{adminToken}}
+```
+
+> [!CAUTION]
+> Escribe **solo** `{{adminToken}}`. No escribas `Bearer` delante: Postman lo agrega por su cuenta. Si escribes `Bearer {{adminToken}}`, la cabecera sale como `Bearer Bearer eyJ...` y recibirás un **401**.
+
+5. Pestaña **Body** → **raw** → **JSON**:
+
+```json
+{
+  "nombre": "Teclado Mecanico Keychron K8 Pro",
+  "descripcion": "TKL, switches Gateron Brown, inalambrico",
+  "precio": 549.90,
+  "idCategoria": 3,
+  "stockReferencial": 25
+}
+```
+
+6. Pulsa **Send**. Debes ver **201 Created**, la cabecera `Location` y el producto con su `id`. El script guarda ese id en `productoId` para las peticiones siguientes.
+
+Qué significa cada campo:
+
+| Campo | Obligatorio | Regla |
+|---|---|---|
+| `nombre` | Sí | Hasta 150 caracteres |
+| `descripcion` | No | Texto libre |
+| `precio` | Sí | Mayor o igual a 0.01, máximo 2 decimales |
+| `idCategoria` | Sí | Debe existir (1 a 5 de serie) |
+| `stockReferencial` | Sí | 0 o más |
+| `disponible` | No | Si lo omites, queda en `true` |
+
+> [!NOTE]
+> No existe `DELETE`. Para "borrar" un producto se hace un **PUT** con `"disponible": false`: es una baja lógica y el producto deja de aparecer al filtrar con `soloDisponibles=true`.
+
+#### 5A.8 — Quién puede hacer qué
+
+| Acción | ADMIN | EMPLEADO | CLIENTE | Sin token |
+|---|---|---|---|---|
+| Leer catálogo y categorías | ✅ | ✅ | ✅ | ✅ |
+| Crear o editar producto / categoría | ✅ | ❌ 403 | ❌ 403 | 401 |
+| Ver estado e historial de monitoreo | ✅ | ✅ | ❌ 403 | 401 |
+| Ver auditoría del BUS | ✅ | ✅ | ❌ 403 | 401 |
+| Registro y login | ✅ | ✅ | ✅ | ✅ |
+
+Los tres usuarios de prueba se crean solos al arrancar Autenticación:
+
+| Usuario | Contraseña | Rol |
+|---|---|---|
+| `admin@techretail.pe` | `Admin123!` | `ADMIN` |
+| `empleado@techretail.pe` | `Empleado123!` | `EMPLEADO` |
+| `cliente@techretail.pe` | `Cliente123!` | `CLIENTE` |
+
+Para ver un **403** en vivo: ejecuta **P8a - Login CLIENTE** (guarda `clienteToken`), abre **P8b** y pulsa **Send**. El token es válido, pero el rol no alcanza.
+
+#### 5A.9 — Los errores también se prueban
+
+Media nota está en demostrar que el sistema **rechaza** lo que debe rechazar. Estas peticiones ya vienen preparadas:
+
+| Petición | Qué demuestra | Esperado |
+|---|---|---|
+| `P2 - Login credenciales invalidas` | No filtra si el usuario existe | 401 `Credenciales invalidas` |
+| `P7 - Escritura sin token` | El BUS corta antes de enrutar | 401 |
+| `P8b - Escritura con rol CLIENTE` | Token válido, rol insuficiente | 403 |
+| `P12 - Validacion de entrada` | Precio negativo rechazado | 400 |
+| `P14 - Historial con limite invalido` | Parámetro fuera de rango | 400 (no 401) |
+| `P17 - Token alterado` | Firma manipulada | 401 |
+| `P6 - Detalle inexistente` | Id que no existe | 404 |
+
+La diferencia entre 401 y 403 es la pregunta clásica: **401 = no sé quién eres**; **403 = sé quién eres, pero no tienes permiso**.
+
+#### 5A.10 — Ejecuta toda la colección de una vez
+
+1. Haz clic en los tres puntos **⋯** junto al nombre de la colección.
+2. Elige **Run collection**.
+3. Pulsa **Run TechRetail SOA - Completa**.
+4. Mira la pestaña **Test Results**: cada punto verde es una prueba que pasó.
+
+> [!IMPORTANT]
+> El orden importa: **P1** y **P8a** llenan los tokens, y **P9** llena `productoId`. Si corres una petición suelta antes del login, verás 401.
+
+> [!NOTE]
+> **P3 - Registro de cliente** usa un usuario fijo: la segunda vez responde **409** porque ya existe. Es el comportamiento correcto; si quieres volver a ver el 201, cambia el `usuario` del body por uno nuevo.
+
+#### 5A.11 — Problemas típicos en Postman
+
+| Lo que ves | Causa | Solución |
+|---|---|---|
+| 401 con token "puesto" | La variable está vacía | Repite **P1** o pega el token en **Variables** |
+| 401 después de un rato | El token venció (60 min) | Repite **P1** |
+| 401 con `Bearer Bearer ...` | Escribiste `Bearer` en el campo Token | Deja solo `{{adminToken}}` |
+| 400 con body vacío | La pestaña **Body** quedó en **none** | Elige **raw** → **JSON** |
+| `Could not send request` | El Gateway no está encendido | Revisa la terminal del Gateway (puerto 8090) |
+| 502 o error de conexión en `/api/clientes` | Ese servicio aún no está implementado | Es esperado: solo 4 servicios funcionan |
+
+#### 5A.12 — Comprueba la segunda capa de seguridad
+
+El proyecto no confía solo en el Gateway: cada servicio valida el token por su cuenta. Para verlo, las peticiones **P18a** y **P18b** van **directo** a Producto, sin pasar por el BUS:
+
+- `P18a` → `GET http://localhost:8082/api/productos` → **200** (la lectura es pública en ambas capas).
+- `P18b` → `POST http://localhost:8082/api/productos` sin token → **401** (el servicio se defiende solo).
+
+Eso es *Zero Trust*: aunque alguien salte el BUS, el servicio igual exige credenciales.
 
 ### Paso 6 — Apaga todo
 
