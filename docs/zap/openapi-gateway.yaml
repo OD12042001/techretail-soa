@@ -1,0 +1,557 @@
+openapi: 3.0.3
+info:
+  title: TechRetail SOA - BUS / Gateway (Avance 3)
+  version: 1.0.0
+  description: |
+    Business endpoints exposed through the BUS (techretail-gateway, port 8090).
+    This contract is the input for the OWASP ZAP active API scan
+    (docs/zap/run-zap-scan.ps1). It documents the 12 business endpoints that are
+    implemented today; actuator probes and scaffolding routes are out of scope.
+
+    Security model: the BUS validates the JWT (HS256) before routing. Public
+    endpoints are POST /api/auth/** and GET /api/productos/**. Writes on
+    /api/productos/** require ADMIN; /api/monitoreo/** and /api/auditoria/**
+    require ADMIN or EMPLEADO. Errors are returned as JSON (401/403/400/404).
+servers:
+  - url: http://localhost:8090
+    description: BUS / Gateway (local development)
+tags:
+  - name: Autenticacion
+    description: Routed to techretail-autenticacion (8088)
+  - name: Producto
+    description: Routed to techretail-producto (8082)
+  - name: Monitoreo
+    description: Routed to techretail-monitoreo (8089)
+  - name: Auditoria
+    description: Served locally by the BUS from db_esb.auditoria_logs
+security:
+  - bearerAuth: []
+paths:
+  /api/auth/registro:
+    post:
+      tags: [Autenticacion]
+      summary: Register a new account (role CLIENTE)
+      operationId: registrar
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RegistroRequest'
+      responses:
+        '201':
+          description: Account created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RegistroResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '409':
+          description: User already registered
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+  /api/auth/login:
+    post:
+      tags: [Autenticacion]
+      summary: Validate credentials and issue a JWT
+      operationId: login
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+      responses:
+        '200':
+          description: Token issued
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LoginResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /api/productos:
+    get:
+      tags: [Producto]
+      summary: List the catalogue (public)
+      operationId: listarProductos
+      security: []
+      parameters:
+        - name: categoria
+          in: query
+          required: false
+          schema:
+            type: integer
+            format: int64
+            example: 3
+        - name: q
+          in: query
+          required: false
+          schema:
+            type: string
+            example: monitor
+        - name: soloDisponibles
+          in: query
+          required: false
+          schema:
+            type: boolean
+            default: false
+            example: true
+      responses:
+        '200':
+          description: Product list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ProductoResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+    post:
+      tags: [Producto]
+      summary: Create a product (ADMIN)
+      operationId: crearProducto
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProductoRequest'
+      responses:
+        '201':
+          description: Product created; Location header points to the resource
+          headers:
+            Location:
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProductoResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+  /api/productos/categorias:
+    get:
+      tags: [Producto]
+      summary: List categories (public)
+      operationId: listarCategorias
+      security: []
+      responses:
+        '200':
+          description: Category list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/CategoriaResponse'
+    post:
+      tags: [Producto]
+      summary: Create a category (ADMIN)
+      operationId: crearCategoria
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CategoriaRequest'
+      responses:
+        '201':
+          description: Category created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CategoriaResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+  /api/productos/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: integer
+          format: int64
+          example: 1
+    get:
+      tags: [Producto]
+      summary: Product detail (public)
+      operationId: obtenerProducto
+      security: []
+      responses:
+        '200':
+          description: Product
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProductoResponse'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    put:
+      tags: [Producto]
+      summary: Update a product or retire it logically with disponible=false (ADMIN)
+      operationId: actualizarProducto
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProductoRequest'
+      responses:
+        '200':
+          description: Updated product
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProductoResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /api/monitoreo/estado:
+    get:
+      tags: [Monitoreo]
+      summary: Latest health status per service (ADMIN, EMPLEADO)
+      operationId: estadoServicios
+      responses:
+        '200':
+          description: One row per monitored service
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/MonitoreoLog'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+  /api/monitoreo/historial:
+    get:
+      tags: [Monitoreo]
+      summary: Health check history (ADMIN, EMPLEADO)
+      operationId: historialMonitoreo
+      parameters:
+        - $ref: '#/components/parameters/Limite'
+      responses:
+        '200':
+          description: Most recent probes
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/MonitoreoLog'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+  /api/auditoria:
+    get:
+      tags: [Auditoria]
+      summary: Recent BUS transactions (ADMIN, EMPLEADO)
+      operationId: auditoriaReciente
+      parameters:
+        - $ref: '#/components/parameters/Limite'
+      responses:
+        '200':
+          description: Most recent audit rows
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/AuditLog'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+  /api/auditoria/resumen:
+    get:
+      tags: [Auditoria]
+      summary: Audit totals, errors and breakdown per service (ADMIN, EMPLEADO)
+      operationId: auditoriaResumen
+      responses:
+        '200':
+          description: Aggregated audit figures
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuditResumen'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  parameters:
+    Limite:
+      name: limite
+      in: query
+      required: false
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 500
+        default: 50
+        example: 5
+  responses:
+    BadRequest:
+      description: Validation error
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ApiError'
+    Unauthorized:
+      description: Missing, tampered or expired token, or invalid credentials
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ApiError'
+    Forbidden:
+      description: The token role does not authorize the operation
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ApiError'
+    NotFound:
+      description: Resource not found
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ApiError'
+  schemas:
+    ApiError:
+      type: object
+      properties:
+        status:
+          type: integer
+          example: 401
+        error:
+          type: string
+          example: Unauthorized
+        message:
+          type: string
+          example: token invalido o expirado
+        timestamp:
+          type: string
+          format: date-time
+    RegistroRequest:
+      type: object
+      required: [usuario, password]
+      properties:
+        usuario:
+          type: string
+          maxLength: 120
+          example: zap.cliente@techretail.pe
+        password:
+          type: string
+          minLength: 8
+          maxLength: 72
+          example: Cliente123!
+        nombre:
+          type: string
+          maxLength: 120
+          example: Cliente ZAP
+    RegistroResponse:
+      type: object
+      properties:
+        idUsuario:
+          type: integer
+          format: int64
+        usuario:
+          type: string
+        nombre:
+          type: string
+        rol:
+          type: string
+          example: CLIENTE
+        estado:
+          type: string
+    LoginRequest:
+      type: object
+      required: [usuario, password]
+      properties:
+        usuario:
+          type: string
+          example: cliente@techretail.pe
+        password:
+          type: string
+          example: Cliente123!
+    LoginResponse:
+      type: object
+      properties:
+        token:
+          type: string
+        tipo:
+          type: string
+          example: Bearer
+        expiraEn:
+          type: integer
+          format: int64
+          example: 3600
+        rol:
+          type: string
+          example: CLIENTE
+        idUsuario:
+          type: integer
+          format: int64
+        nombre:
+          type: string
+    ProductoRequest:
+      type: object
+      required: [nombre, precio, idCategoria, stockReferencial]
+      properties:
+        nombre:
+          type: string
+          maxLength: 150
+          example: Producto ZAP
+        descripcion:
+          type: string
+          example: Creado por el escaneo OWASP ZAP
+        precio:
+          type: number
+          minimum: 0.01
+          example: 99.90
+        idCategoria:
+          type: integer
+          format: int64
+          example: 3
+        stockReferencial:
+          type: integer
+          minimum: 0
+          example: 5
+        disponible:
+          type: boolean
+          description: Omitted means true; false retires the product logically
+          example: true
+    ProductoResponse:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+        nombre:
+          type: string
+        descripcion:
+          type: string
+        precio:
+          type: number
+        idCategoria:
+          type: integer
+          format: int64
+        categoria:
+          type: string
+        stockReferencial:
+          type: integer
+        disponible:
+          type: boolean
+        fechaCreacion:
+          type: string
+          format: date-time
+    CategoriaRequest:
+      type: object
+      required: [nombre]
+      properties:
+        nombre:
+          type: string
+          maxLength: 100
+          example: Categoria ZAP
+        descripcion:
+          type: string
+          maxLength: 255
+          example: Creada por el escaneo OWASP ZAP
+    CategoriaResponse:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+        nombre:
+          type: string
+        descripcion:
+          type: string
+    MonitoreoLog:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+        servicio:
+          type: string
+          example: techretail-producto
+        estado:
+          type: string
+          enum: [UP, DOWN]
+        tiempoRespuestaMs:
+          type: integer
+        fechaConsulta:
+          type: string
+          format: date-time
+    AuditLog:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+        servicioOrigen:
+          type: string
+          example: GATEWAY
+        servicioDestino:
+          type: string
+          example: techretail-producto
+        operacion:
+          type: string
+          example: GET
+        endpoint:
+          type: string
+          example: /api/productos/1
+        estadoRespuesta:
+          type: integer
+          example: 200
+        usuario:
+          type: string
+          example: admin@techretail.pe
+        timestamp:
+          type: string
+          format: date-time
+    AuditResumen:
+      type: object
+      properties:
+        total:
+          type: integer
+          format: int64
+        errores:
+          type: integer
+          format: int64
+        porServicio:
+          type: object
+          additionalProperties: true

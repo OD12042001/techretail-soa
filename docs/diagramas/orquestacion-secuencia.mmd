@@ -1,0 +1,29 @@
+sequenceDiagram
+    autonumber
+    actor C as Cliente (Postman)
+    participant G as BUS / Gateway :8090
+    participant A as Autenticacion :8088
+    participant P as Producto :8082
+    participant E as db_esb (auditoria_logs)
+
+    C->>G: POST /api/auth/login {usuario, password}
+    Note over G: Ruta publica: no exige JWT
+    G->>A: Reenvia POST /api/auth/login + traceparent
+    A->>A: Verifica BCrypt y firma JWT HS256 (sub, rol, exp)
+    A-->>G: 200 {token, rol: ADMIN}
+    G--)E: INSERT auditoria (asincrono, no bloquea)
+    G-->>C: 200 {token, tipo: Bearer, expiraEn: 3600}
+
+    C->>G: POST /api/productos + Authorization: Bearer token
+    G->>G: JwtAuthenticationFilter valida firma, exp y rol ADMIN
+    alt Token ausente, alterado o rol insuficiente
+        G--)E: INSERT auditoria 401 o 403
+        G-->>C: 401 o 403 JSON - Producto nunca recibe la peticion
+    else Token valido y rol ADMIN
+        G->>P: Reenvia POST /api/productos + Bearer + traceparent
+        P->>P: Revalida JWT (segunda capa) y Bean Validation
+        P->>P: INSERT en db_producto (Flyway, JPA)
+        P-->>G: 201 Created + Location
+        G--)E: INSERT auditoria 201
+        G-->>C: 201 {id, nombre, precio, categoria}
+    end

@@ -1,0 +1,39 @@
+flowchart LR
+    C["Cliente REST (Postman)"]
+
+    subgraph BUS["BUS / Gateway - techretail-gateway :8090"]
+        AU["AuditFilter: registra toda peticion"]
+        F["JwtAuthenticationFilter: valida firma, exp y rol"]
+        R["Rutas Spring Cloud Gateway WebMVC"]
+    end
+
+    AUTH["Autenticacion :8088 - emite JWT"]
+    PROD["Producto :8082 - revalida JWT"]
+    MON["Monitoreo :8089 - revalida JWT"]
+    SCAF["6 servicios en andamiaje :8081, :8083 a :8087"]
+
+    DBA[("db_autenticacion")]
+    DBP[("db_producto")]
+    DBM[("db_monitoreo")]
+    DBE[("db_esb")]
+    JAE["Jaeger :16686 - trazas OTLP"]
+
+    C -->|"HTTP + Bearer JWT"| AU
+    AU --> F
+    F --> R
+    R -->|"/api/auth/**"| AUTH
+    R -->|"/api/productos/**"| PROD
+    R -->|"/api/monitoreo/**"| MON
+    AU -.->|"INSERT asincrono"| DBE
+    F -->|"/api/auditoria/** local: SELECT"| DBE
+
+    AUTH --> DBA
+    PROD --> DBP
+    MON --> DBM
+
+    MON -.->|"GET /actuator/health cada 30 s"| AUTH
+    MON -.->|"sondeo"| PROD
+    MON -.->|"sondeo"| BUS
+    MON -.->|"sondeo: DOWN hasta implementarse"| SCAF
+
+    BUS -.->|"spans OTLP, traceparent W3C"| JAE
