@@ -9,8 +9,8 @@
 **Carrera:** Ingeniería de Sistemas e Informática
 **Docente:** Calderón Chuquillanqui, Anthony Vidal
 **Equipo:** Grupo 1
-**Integrante:** [COMPLETAR: apellidos y nombres]
-**Fecha de entrega:** [COMPLETAR: dd/mm/2026]
+**Integrante:** [COMPLETAR: Apellidos, Nombres]
+**Fecha de entrega:** 16 de noviembre de 2026
 
 ---
 
@@ -30,7 +30,9 @@ La observabilidad se resuelve en cuatro frentes complementarios (§2.6): sondas 
 
 El estado de pruebas automatizadas es de **115 pruebas** en los cuatro módulos implementados, distribuidas en 26 de autenticación, 37 de producto, 27 del BUS y 25 de monitoreo. La suite se ejecutó completa el **08/11/2026** con `.\mvnw.cmd clean test`: **115 pruebas, 0 fallos, 0 errores y 0 omitidas**, con `BUILD SUCCESS` en los cuatro módulos. Con las 12 pruebas de contexto de los seis módulos de andamiaje —también en verde—, el repositorio completo suma **127 pruebas**. Las pruebas manuales con Postman, con la petición y la respuesta reales de cada caso, se documentan en la sección 3.2.
 
-**Alcance declarado con honestidad:** los seis servicios restantes (cliente, pedido, pago, inventario, notificación y facturación SUNAT) continúan como andamiaje —módulo, configuración y migración inicial— y no forman parte de la demostración de este avance. El catálogo UDDI se mantiene como **propuesta de diseño** (sección 4), consistente con lo planificado en el Avance 2.
+La integración entre servicios se documenta como **orquestación mediada por el BUS** (sección 4), con diagrama de componentes y de secuencia: el BUS delega en Autenticación y en Producto, y Monitoreo invoca periódicamente a los demás servicios. La publicación de servicios se resuelve hoy con el registro estático de rutas del BUS y un contrato OpenAPI, con el catálogo UDDI como evolución (sección 5). La superficie expuesta por el BUS se somete a un escaneo activo con **OWASP ZAP** (sección 6).
+
+**Alcance declarado con honestidad:** los seis servicios restantes (cliente, pedido, pago, inventario, notificación y facturación SUNAT) continúan como andamiaje —módulo, configuración y migración inicial— y no forman parte de la demostración de este avance.
 
 ---
 
@@ -44,6 +46,22 @@ Los cuatro módulos son proyectos Maven **independientes**, no un reactor multi-
 | `techretail-producto` | 8082 | `db_producto` | Catálogo de productos y categorías |
 | `techretail-monitoreo` | 8089 | `db_monitoreo` | Sondeo de salud y tiempos de respuesta |
 | `techretail-gateway` | 8090 | `db_esb` | Enrutamiento, seguridad central y auditoría |
+
+**Stack técnico** (verificado contra los `pom.xml` y `docker-compose.yml`):
+
+| Capa | Tecnología | Dónde se usa |
+|---|---|---|
+| Lenguaje | Java 21 | Los cuatro módulos |
+| Framework | Spring Boot 4.1.1 con starters modulares (`spring-boot-starter-webmvc`) | Los cuatro módulos |
+| Seguridad | Spring Security + jjwt 0.11.5 (JWT HS256); BCrypt costo 12 | Emisión en autenticación; validación en BUS, producto y monitoreo |
+| Persistencia | Spring Data JPA + Flyway | Autenticación, producto, monitoreo |
+| Persistencia | `JdbcTemplate` + Flyway (sin JPA, a propósito) | BUS / Gateway |
+| Base de datos | PostgreSQL 16 (`postgres:16-alpine`), una base por servicio | Los cuatro módulos |
+| Integración | Spring Cloud Gateway Server WebMVC (servlet) | BUS / Gateway |
+| Integración | `java.net.http.HttpClient` + `@Scheduled` | Sondeo de monitoreo |
+| Validación | Bean Validation (`spring-boot-starter-validation`) | Autenticación, producto, BUS |
+| Observabilidad | Actuator, `spring-boot-starter-opentelemetry`, Jaeger 1.62.0 | Los cuatro módulos |
+| Build y pruebas | Maven Wrapper, JUnit Jupiter, MockMvc, H2 (`MODE=PostgreSQL`) | Los cuatro módulos |
 
 ## 2.1 Autenticación (`techretail-autenticacion`)
 
@@ -477,7 +495,9 @@ Ejecución del **08/11/2026** con `.\mvnw.cmd clean test` desde cada módulo (pe
 
 ## 3.2 Pruebas manuales con Postman
 
-Las pruebas se ejecutaron el **08/11/2026** contra el BUS en `http://localhost:8090`, con PostgreSQL en el puerto 5433 y los cuatro servicios levantados. La evidencia no son capturas de pantalla: cada caso conserva la **petición exacta** y la **respuesta exacta** en bloques `http` y `json`, de modo que se puedan reproducir pegándolos en Postman o importando la colección `docs/postman_collection/techretail-avance3.json`.
+Las pruebas se ejecutaron el **08/11/2026** contra el BUS en `http://localhost:8090`, con PostgreSQL en el puerto 5433 y los cuatro servicios levantados. Cada caso conserva la **petición exacta** y la **respuesta exacta** en bloques `http` y `json`, reproducibles pegándolos en Postman o importando la colección `docs/postman_collection/techretail-avance3.json`, y los casos principales se acompañan de la captura de pantalla de Postman con la petición y la respuesta.
+
+> **[COMPLETAR: capturas de Postman]** Guardar en `docs/capturas/postman/` una captura por caso (petición y respuesta visibles) e insertarla debajo del bloque JSON correspondiente: `P1-login-admin.png`, `P4-catalogo-publico.png`, `P8-escritura-cliente-403.png`, `P9-alta-producto.png`, `P10-actualizacion-producto.png`, `P17-token-alterado-401.png`.
 
 Todos los casos se ejecutan contra el BUS, salvo P18, que se incluye a propósito para demostrar la segunda capa de seguridad (el acceso directo al servicio destino).
 
@@ -681,33 +701,134 @@ HTTP/1.1 400 Bad Request
 {"timestamp":"2026-11-08T19:33:48.064Z","status":400,"error":"Bad Request","path":"/api/monitoreo/historial"}
 ```
 
-El `400` de P14 es el que motivó una corrección durante esta misma sesión de pruebas: el error dispatch interno de Tomcat (`/error`) quedaba detrás de la cadena de seguridad y convertía cualquier `400` o `404` en `401`. Se corrigió en `SecurityConfig` de gateway, monitoreo y producto, y se agregó una prueba de regresión sobre Tomcat real, porque la prueba equivalente con MockMvc pasaba en verde sin reproducir el problema (ver §5, lección 4).
+El `400` de P14 es el que motivó una corrección durante esta misma sesión de pruebas: el error dispatch interno de Tomcat (`/error`) quedaba detrás de la cadena de seguridad y convertía cualquier `400` o `404` en `401`. Se corrigió en `SecurityConfig` de gateway, monitoreo y producto, y se agregó una prueba de regresión sobre Tomcat real, porque la prueba equivalente con MockMvc pasaba en verde sin reproducir el problema (ver §7, lección 4).
 
 ### 3.2.11 Sobre DELETE
 
 El catálogo no expone `DELETE` por diseño; la baja es lógica con `disponible=false` (caso P11). Se documenta explícitamente para que la rúbrica no lo lea como un faltante: un producto retirado debe seguir existiendo para que la auditoría y el historial de ventas conserven sentido.
 
-## 3.3 Alcance del Avance 3 respecto de la rúbrica
+## 3.3 Cobertura de la rúbrica del Avance 3
 
-| Requisito de la rúbrica | Estado |
-|---|---|
-| AutenticacionService (registro + login + JWT) | Implementado |
-| ProductoService con su propia BD y Flyway | Implementado |
-| ClienteService con su propia BD y Flyway | **Pendiente** (módulo en andamiaje) |
-| Capturas Postman (GET, POST, PUT) con JSON | Implementado y documentado (§3.2): P4 `GET`, P9 `POST`, P10/P11 `PUT`, con la petición y la respuesta reales |
-| Capturas Postman `DELETE` | Cubierto como baja lógica (P11); no hay `DELETE` por diseño |
-| Conexión a PostgreSQL, una BD por servicio | Implementado y documentado (§2.5) |
-| Demostración de asincronismo con RabbitMQ | **Pendiente** (dependencias declaradas, sin productor/consumidor) |
-| FacturacionSunatService Contract-First + WSDL + invocación SOAP | **Pendiente** (contrato XSD y plugin listos, sin lógica) |
-| Catálogo UDDI funcional | **Propuesto** (§4) |
-| Colección Postman exportada | Incluida en `docs/postman_collection/techretail-avance3.json` (18 casos ejecutados) |
-| Lecciones aprendidas | Cubierto (§5) |
+| Requisito de la rúbrica | Estado | Dónde se evidencia |
+|---|---|---|
+| Carátula y resumen ejecutivo | Cumplido | Carátula y §1 |
+| Servicios implementados (mínimo 2): lenguaje/framework y código documentado | Cumplido: cuatro servicios en Java 21 / Spring Boot 4.1.1 | §2 (stack técnico al inicio; código comentado en §2.1 a §2.3) |
+| Pruebas de servicios: Postman con petición/respuesta y JSON real | Cumplido; capturas por anexar | §3.2 (18 casos con JSON real), colección `docs/postman_collection/techretail-avance3.json`; capturas en `docs/capturas/postman/` |
+| Orquestación parcial: cómo un servicio invoca a otro y diagrama de integración | Cumplido | §4 (dos flujos reales, diagrama de componentes y diagrama de secuencia) |
+| Registro de servicios: publicación UDDI/REST | Cumplido: publicación REST mediante la tabla de rutas del BUS y el contrato OpenAPI; UDDI como evolución | §5 |
+| Lecciones aprendidas / dificultades encontradas | Cumplido | §7 |
+| Informe del escáner de vulnerabilidades OWASP ZAP | Cumplido: 0 alertas altas, 0 medias, 2 bajas y 2 informativas | §6 e informes en `docs/zap/reports/zap-report.{pdf,html,md,json}` |
+
+**Fuera del alcance de este avance, planificado para el entregable final:** ClienteService, mensajería asíncrona con RabbitMQ, FacturacionSunatService SOAP contract-first y un catálogo UDDI funcional. Sus módulos existen como andamiaje (configuración, base de datos y migración inicial). La ausencia de `DELETE` en el catálogo es una decisión de diseño, no un faltante (§3.2.11).
 
 ---
 
-# 4. Registro de Servicios (Catálogo UDDI) — Propuesta
+# 4. Orquestación Parcial
 
-El catálogo de servicios se mantiene como **propuesta de diseño**, no como funcionalidad implementada. La decisión es explícita: se priorizó que los servicios existentes funcionen y estén auditados antes de añadir un componente de descubrimiento que nadie consumiría todavía.
+## 4.1 Enfoque: orquestación mediada por el BUS
+
+En este avance la composición de servicios ocurre **a través del BUS**. Ningún servicio de negocio llama directamente a otro servicio de negocio: el cliente invoca un único punto de entrada (`:8090`) y el BUS decide —por ruta y por rol— a qué servicio delega, reenvía la petición y registra el resultado. Es el patrón de mediación de un ESB: el BUS controla el flujo (autenticación previa, autorización, enrutamiento y auditoría) y los servicios permanecen desacoplados entre sí, porque ninguno conoce la URL de otro.
+
+Se documentan dos flujos que ya existen en el código y están cubiertos por pruebas:
+
+1. **BUS → Autenticación → Producto**: una operación de negocio protegida (alta de producto) que exige un token emitido por un servicio y consumido por otro.
+2. **Monitoreo → resto de servicios**: invocación periódica servicio a servicio para verificar la salud del sistema.
+
+**Alcance declarado:** la orquestación de negocio entre servicios de dominio —por ejemplo, Pedido consultando a Producto e Inventario mediante OpenFeign, dependencia ya declarada en `techretail-pedido`— corresponde al entregable final; hoy Pedido es andamiaje.
+
+## 4.2 Diagrama de integración
+
+![Diagrama de integración de TechRetail SOA](diagramas/orquestacion-componentes.png)
+
+*Figura 1. Diagrama de componentes de la integración actual. Las líneas sólidas son invocaciones síncronas en la ruta de la petición; las punteadas, invocaciones asíncronas o periódicas (auditoría, sondeo de salud y exportación de trazas). Fuente editable: `docs/diagramas/orquestacion-componentes.mmd`.*
+
+Toda petición externa atraviesa dos filtros del BUS en este orden: `AuditFilter`, que envuelve la cadena para registrar también los rechazos, y `JwtAuthenticationFilter`, que valida el token antes de enrutar. Solo entonces la tabla de rutas de Spring Cloud Gateway WebMVC entrega la petición al servicio destino, o la atiende localmente si es `/api/auditoria/**`.
+
+## 4.3 Flujo 1 — Alta de producto orquestada por el BUS
+
+![Diagrama de secuencia: login y alta de producto a través del BUS](diagramas/orquestacion-secuencia.png)
+
+*Figura 2. Secuencia del login y del alta de un producto a través del BUS, con la rama de rechazo. Fuente editable: `docs/diagramas/orquestacion-secuencia.mmd`.*
+
+Los números corresponden a los pasos del diagrama:
+
+- **Pasos 1 a 6 — obtención del token.** `POST /api/auth/login` es una ruta pública. El BUS la reenvía a Autenticación (ruta `autenticacion`, `Path=/api/auth/**`), que verifica la contraseña con BCrypt y firma un JWT HS256 con `sub`, `rol`, `iss`, `iat`, `exp` e `idUsuario`. El BUS entrega la fila de auditoría a su ejecutor asíncrono y devuelve el token sin esperar la escritura (caso P1).
+- **Pasos 7 y 8 — autorización centralizada.** Con el token en `Authorization: Bearer`, el BUS valida firma, expiración y rol `ADMIN` antes de enrutar (§2.4).
+- **Pasos 9 y 10 — rechazo temprano.** Sin token, con token alterado o con rol insuficiente, el BUS responde `401` o `403` en JSON y audita el rechazo; **Producto nunca recibe la petición** (casos P7, P8 y P17).
+- **Pasos 11 a 16 — delegación.** El BUS reenvía la petición a Producto conservando `Authorization` y la cabecera W3C `traceparent`. Producto revalida el token (segunda capa, §1), aplica Bean Validation, persiste en `db_producto` y responde `201` con `Location`; el BUS audita el `201` y devuelve la respuesta tal como la recibe (caso P9).
+
+La relación entre Autenticación y Producto merece una aclaración: **Producto no llama a Autenticación en cada petición**. Confía en la firma HS256 del token, verificada con el secreto compartido `JWT_SECRET`. El acoplamiento es de contrato (formato y firma del token), no de ejecución: una caída de Autenticación impide emitir tokens nuevos, pero no bloquea las operaciones con tokens vigentes (una hora).
+
+**Evidencia de la invocación entre servicios.** Las trazas de Jaeger de §2.6.2 lo demuestran: la traza `3f1965538e01548974d341321f94ccb8` reúne spans de `techretail-gateway` y `techretail-autenticacion` en una sola petición, y la traza `c13d6a3fb34de090f1ad52f773d5bb59` hace lo mismo con `techretail-producto`, con relación padre-hijo entre el span del BUS y el del servicio destino. La auditoría del BUS (caso P15) registra cada delegación con su `servicioDestino` y su estado real.
+
+> **[COMPLETAR: captura de Jaeger]** Insertar aquí la captura de la vista de traza de Jaeger (`http://localhost:16686`) de un `POST /api/productos` atravesando `techretail-gateway` y `techretail-producto`, guardada como `docs/capturas/jaeger-traza-gateway-producto.png`.
+
+## 4.4 Flujo 2 — Monitoreo invoca a los demás servicios
+
+Monitoreo es el único servicio que inicia por su cuenta llamadas a otros servicios. `HttpHealthProbe` usa `java.net.http.HttpClient` para enviar `GET /actuator/health` a cada uno de los nueve servicios declarados en `techretail.monitoreo.servicios[*]`, cada 30 s (`@Scheduled` con `fixedDelay`) y con un timeout de 2 s. Un servicio se considera `UP` solo si el cuerpo declara `"status":"UP"` (§2.3). Cada resultado se persiste en `db_monitoreo.monitoreo_logs`.
+
+Las sondas van **directo a cada servicio, no a través del BUS**: el objetivo es medir la salud de cada instancia, y pasar por el BUS mediría al BUS. En cambio, la **consulta** del estado sí es una operación de negocio y pasa por el BUS con rol `ADMIN` o `EMPLEADO` (`GET /api/monitoreo/estado`, caso P13). Así, el flujo encadena Cliente → BUS → Monitoreo para mostrar el resultado de Monitoreo → servicios: en la evidencia de P13, los tres servicios levantados aparecen `UP` y los seis de andamiaje, `DOWN`.
+
+## 4.5 Resumen de invocaciones entre componentes
+
+| Origen | Destino | Mecanismo | Modo | Evidencia |
+|---|---|---|---|---|
+| Cliente | BUS `:8090` | HTTP REST + Bearer JWT | Síncrono | §3.2 (P1 a P17) |
+| BUS | Autenticación `:8088` | Proxy HTTP, ruta `/api/auth/**` | Síncrono | P1 a P3; traza `3f19…` |
+| BUS | Producto `:8082` | Proxy HTTP, ruta `/api/productos/**` | Síncrono | P4 a P12 y P17; traza `c13d…` |
+| BUS | Monitoreo `:8089` | Proxy HTTP, ruta `/api/monitoreo/**` | Síncrono | P13, P14 |
+| BUS | `db_esb` | `JdbcTemplate` en ejecutor acotado | Asíncrono | P15, P16 |
+| Monitoreo | Nueve servicios | `HttpClient`, `GET /actuator/health` | Periódico (30 s), timeout 2 s | P13 |
+| Autenticación | BUS, Producto, Monitoreo | Contrato JWT HS256 con secreto compartido, sin llamada | Sin acoplamiento en ejecución | P17, P18 |
+| Los cuatro servicios | Jaeger `:4318` | Exportación OTLP sobre HTTP | Asíncrono | §2.6.2 |
+
+---
+
+# 5. Registro de Servicios (Publicación REST y Catálogo UDDI)
+
+## 5.1 Publicación actual: registro estático en el BUS
+
+Hoy los servicios se publican como **recursos REST detrás del BUS**. El registro es estático y declarativo: la tabla de rutas del gateway asocia cada prefijo lógico con la URL física del servicio, y cubre de forma simplificada las tres operaciones de UDDI:
+
+- **Publish:** un servicio se publica al declarar su ruta en `application.properties` del gateway. La URL física se inyecta por variable de entorno (`SERVICIO_<NOMBRE>_URL`), de modo que mover un servicio de host no exige recompilar.
+- **Find:** el consumidor solo necesita conocer el BUS (`http://localhost:8090`) y el contrato publicado en `docs/zap/openapi-gateway.yaml` (OpenAPI 3.0, 12 operaciones), que es el equivalente REST del WSDL de un servicio SOAP.
+- **Bind:** en cada petición el BUS resuelve el prefijo a la URL física y reenvía la llamada (Spring Cloud Gateway Server WebMVC).
+
+Fragmento real de la tabla de rutas (`techretail-gateway/src/main/resources/application.properties`):
+
+```properties
+# Nombre lógico -> prefijo publicado -> URL física (sobrescribible por entorno)
+spring.cloud.gateway.server.webmvc.routes[1].id=productos
+spring.cloud.gateway.server.webmvc.routes[1].uri=${SERVICIO_PRODUCTOS_URL:http://localhost:8082}
+spring.cloud.gateway.server.webmvc.routes[1].predicates[0]=Path=/api/productos/**
+spring.cloud.gateway.server.webmvc.routes[7].id=autenticacion
+spring.cloud.gateway.server.webmvc.routes[7].uri=${SERVICIO_AUTENTICACION_URL:http://localhost:8088}
+spring.cloud.gateway.server.webmvc.routes[7].predicates[0]=Path=/api/auth/**
+```
+
+Servicios publicados en el BUS:
+
+| Ruta (`id`) | Prefijo publicado | Destino por defecto | Acceso exigido por el BUS | Estado |
+|---|---|---|---|---|
+| `clientes` | `/api/clientes/**` | `:8081` | Autenticado | Andamiaje |
+| `productos` | `/api/productos/**` | `:8082` | `GET` público; escritura `ADMIN` | **Implementado** |
+| `pedidos` | `/api/pedidos/**` | `:8083` | Autenticado | Andamiaje |
+| `pagos` | `/api/pagos/**` | `:8084` | `ADMIN`, `CLIENTE` | Andamiaje |
+| `inventario` | `/api/inventario/**` | `:8085` | `ADMIN`, `EMPLEADO` | Andamiaje |
+| `notificaciones` | `/api/notificaciones/**` | `:8086` | Autenticado | Andamiaje |
+| `facturacion`, `facturacion-endpoint` | `/ws/facturacion`, `/ws/facturacion/**` | `:8087` | `ADMIN`, `EMPLEADO` | Andamiaje (SOAP) |
+| `facturacion-wsdl` | `/ws/facturacion.wsdl` | `:8087` | Autenticado | Andamiaje (SOAP) |
+| `autenticacion` | `/api/auth/**` | `:8088` | `POST` público | **Implementado** |
+| `monitoreo` | `/api/monitoreo/**` | `:8089` | `ADMIN`, `EMPLEADO` | **Implementado** |
+| *(local)* | `/api/auditoria/**` | BUS (`db_esb`) | `ADMIN`, `EMPLEADO` | **Implementado** |
+
+Existe un segundo registro, orientado a la salud: la lista `techretail.monitoreo.servicios[*]` del servicio de monitoreo, con URLs sobrescribibles por `SERVICIO_<NOMBRE>_URL`, define a quién se sondea (§4.4).
+
+**Limitación conocida:** son dos listas mantenidas a mano. No hay autorregistro, ni versionado de servicios, ni alta de instancias sin reiniciar el BUS. Esa limitación motiva la evolución hacia un catálogo.
+
+## 5.2 Evolución prevista: catálogo UDDI
+
+El catálogo de servicios se mantiene como **propuesta de diseño**, no como funcionalidad implementada. La decisión es explícita: se priorizó que los servicios existentes funcionen y estén auditados antes de añadir un componente de descubrimiento que nadie consumiría todavía. Con el catálogo, la tabla de rutas del BUS y la lista de monitoreo se derivarían de una única fuente de verdad.
 
 El diseño previsto, coherente con el Avance 2 §5.3, es el siguiente:
 
@@ -723,7 +844,83 @@ El BUS ya contempla la ruta pública de descubrimiento: `SecurityConfig` permite
 
 ---
 
-# 5. Lecciones Aprendidas / Dificultades Encontradas
+# 6. Escáner de Vulnerabilidades — OWASP ZAP
+
+## 6.1 Objetivo y alcance
+
+El escaneo busca vulnerabilidades en la superficie que el sistema expone a sus consumidores antes del entregable final.
+
+| Aspecto | Definición |
+|---|---|
+| Objetivo | BUS / Gateway en `http://localhost:8090`, el punto único de entrada |
+| Superficie | Las 12 operaciones de negocio de §2, descritas en `docs/zap/openapi-gateway.yaml` |
+| Autenticación | Token `ADMIN` inyectado en todas las peticiones, para alcanzar también los endpoints protegidos |
+| Fuera de alcance | Puertos directos de los servicios (`8082`, `8088`, `8089`), servicios de andamiaje, endpoints de Actuator e infraestructura (PostgreSQL, RabbitMQ, Jaeger) |
+
+## 6.2 Herramienta y procedimiento
+
+| Elemento | Valor |
+|---|---|
+| Herramienta | OWASP ZAP, imagen Docker oficial `ghcr.io/zaproxy/zaproxy:stable` (versión `2.17.0`) |
+| Modo de escaneo | `zap-api-scan.py`: importa el contrato OpenAPI, ejecuta el escaneo pasivo y un escaneo activo ajustado para APIs |
+| Autenticación | Variable `ZAP_AUTH_HEADER_VALUE=Bearer <token>`: ZAP añade la cabecera `Authorization` a cada petición |
+| Red | El contenedor alcanza el BUS del host mediante `host.docker.internal:8090` |
+| Automatización | `docs/zap/run-zap-scan.ps1` |
+| Fecha de ejecución | 16/11/2026 (`05:06:33 UTC`) |
+
+El script ejecuta cinco pasos: comprueba que Docker y el BUS estén en `UP`; obtiene un token `ADMIN` con `POST /api/auth/login` a través del BUS; genera una copia del contrato con la URL alcanzable desde el contenedor; lanza el escaneo; y convierte el informe HTML a PDF con Microsoft Edge en modo headless. El núcleo del escaneo es:
+
+```powershell
+docker run --rm -v "${reportsDir}:/zap/wrk/:rw" `
+  -e "ZAP_AUTH_HEADER_VALUE=Bearer $token" `
+  ghcr.io/zaproxy/zaproxy:stable zap-api-scan.py `
+  -t /zap/wrk/openapi-scan.yaml -f openapi `
+  -r zap-report.html -w zap-report.md -J zap-report.json -I
+```
+
+El escaneo activo envía cargas de ataque (inyección SQL, XSS, *path traversal*, entre otras) a los endpoints `POST` y `PUT`, por lo que crea usuarios, productos y categorías de prueba. Se ejecutó únicamente contra el entorno local de desarrollo.
+
+## 6.3 Resultados
+
+El escaneo activo exploró **50 endpoints/variantes** (100 % con `Content-Type: application/json`; 66 % respuestas `4xx` ante cargas de ataque, 32 % `2xx`) y finalizó con **cero vulnerabilidades de riesgo alto o medio**:
+
+| Nivel de riesgo | Alertas | Instancias |
+|---|---|---|
+| Alto (`High`) | **0** | 0 |
+| Medio (`Medium`) | **0** | 0 |
+| Bajo (`Low`) | **2** | 3 + Sistemático |
+| Informativo (`Informational`) | **2** | 48 + Sistemático |
+
+Detalle y clasificación técnica de las cuatro alertas reportadas en `docs/zap/reports/zap-report.md`:
+
+| # | Alerta (ID ZAP / CWE) | Riesgo | Endpoints afectados | Análisis (verdadero o falso positivo) | Acción / Mitigación |
+|---|---|---|---|---|---|
+| 1 | **A Server Error response code was returned by the server** (`100000` / CWE-388) | Bajo (`Low`, confianza alta) | 3 instancias en `techretail-producto`: `POST /api/productos`, `POST /api/productos/categorias`, `PUT /api/productos/1` | **Verdadero positivo (manejo de excepción de BD).** Durante el *fuzzing*, ZAP reenvía el mismo nombre de categoría (violando la restricción `UNIQUE` de `categorias.nombre`) o inyecta bytes nulos (`0x00`) que PostgreSQL UTF-8 rechaza con `DataIntegrityViolationException`. A diferencia de Autenticación (que traduce duplicados a `409 Conflict`), el `ApiExceptionHandler` de Producto aún no captura `DataIntegrityViolationException`, por lo que retorna `500` genérico sin filtrar *stack trace* ni SQL. | Mapear `DataIntegrityViolationException` a `409 Conflict` / `400 Bad Request` en el `ApiExceptionHandler` de `techretail-producto` en el entregable final. |
+| 2 | **Cross-Origin-Resource-Policy Header Missing or Invalid** (`90004` / CWE-693) | Bajo (`Low`, confianza media) | Sistemático (`GET`/`POST`/`PUT` `/api/productos/**`) | **Configuración por defecto en API REST.** La cabecera `Cross-Origin-Resource-Policy` (CORP) es un control opt-in de navegadores contra ataques de canal lateral (*Spectre*) sobre recursos embebidos. Spring Security no la incluye por defecto en respuestas JSON (`application/json`). | Si se incorpora un frontend web en otro origen, añadir `Cross-Origin-Resource-Policy: same-origin` en el `SecurityConfig` del BUS (`headers`). |
+| 3 | **A Client Error response code was returned by the server** (`100000` / CWE-388) | Informativo (`Informational`) | 48 instancias (`400`, `401`, `404`, `409`) en `/api/auth/**`, `/api/productos/**`, `/api/monitoreo/**`, `/api/auditoria/**` y rutas de metadatos cloud (`/latest/meta-data/`, `/computeMetadata/v1/`) | **Falso positivo / comportamiento esperado.** Refleja que las defensas de entrada funcionan: Bean Validation rechaza parámetros maliciosos (`limite=http://www.google.com/` → `400`), Autenticación bloquea credenciales inválidas (`401`) y duplicados (`409`), y el BUS responde `404` ante rutas inexistentes o intentos de SSRF hacia metadatos cloud. | Ninguna: es la evidencia de que la validación de entrada y el control de acceso están activos. |
+| 4 | **Non-Storable Content** (`10049` / CWE-524) | Informativo (`Informational`) | Sistemático (`Cache-Control: no-store`) | **Falso positivo / medida de seguridad intencional.** Spring Security inyecta `Cache-Control: no-store, no-cache, max-age=0, must-revalidate` por defecto para impedir que proxies compartidos o navegadores almacenen respuestas que contienen tokens JWT o datos de negocio. | Ninguna: mantener `no-store` en endpoints autenticados y de emisión de tokens. |
+
+## 6.4 Observaciones conocidas antes del escaneo
+
+Se registran además tres puntos de arquitectura revisados manualmente para contrastarlos con el informe automatizado:
+
+- **`Location` con el host interno.** El `201` de P9 devuelve `Location: http://localhost:8082/...`: el BUS no reescribe la cabecera y revela el puerto interno de Producto. La mitigación candidata es reescribir `Location` en el BUS.
+- **Puertos directos alcanzables.** Los servicios responden en su propio puerto (P18). La segunda capa de validación JWT impide la escritura sin token, y en un despliegue real esos puertos se restringirían a la red interna.
+- **Valores por defecto de desarrollo.** `JWT_SECRET` tiene un valor por defecto en los `application.properties` y los usuarios de demostración se aprovisionan al arrancar. Ambos son aceptables solo en local: en despliegue se inyecta `JWT_SECRET` por entorno y se fija `AUTH_DEMO_USERS=false`.
+
+## 6.5 Conclusión
+
+El escaneo activo de OWASP ZAP (`v2.17.0`) sobre las 12 operaciones expuestas en el BUS confirma una **postura de seguridad sólida para el alcance del Avance 3**:
+
+1. **Sin vulnerabilidades críticas, altas ni medias (0 High / 0 Medium).** Las pruebas de inyección SQL, XSS, *path traversal* y SSRF contra metadatos cloud fueron contenidas por el uso de consultas parametrizadas (JPA y `JdbcTemplate`), Bean Validation y el filtrado estricto de rutas en el Gateway.
+2. **Defensa efectiva en la capa de entrada.** El 66 % de las respuestas del escáner fueron errores `4xx` controlados (`400`, `401`, `404`, `409`) en formato JSON uniforme, sin exponer trazas de pila (*stack traces*), versiones de servidor ni consultas SQL.
+3. **Acciones acotadas para la entrega final.** El único hallazgo funcional de riesgo bajo —las 3 respuestas `500` por violación de restricción en `techretail-producto` ante payloads repetidos de *fuzzing*— se corrige añadiendo un `@ExceptionHandler(DataIntegrityViolationException.class)` que devuelva `409 Conflict`, homologándolo con `techretail-autenticacion`.
+
+El informe completo se entrega junto con este documento en `docs/zap/reports/zap-report.pdf` (además de las versiones `zap-report.html`, `zap-report.md` y `zap-report.json`).
+
+---
+
+# 7. Lecciones Aprendidas / Dificultades Encontradas
 
 **1. La configuración silenciosa cuesta más que cualquier bug de lógica.** Durante la Fase 1 los diez módulos arrancaban, pero los tests fallaban con `Failed to determine a suitable driver class`. La causa no era el driver: los `application.properties` contenían bloques YAML que Spring simplemente ignoraba. `server.port`, `spring.datasource.*` y `spring.flyway.*` no existían para el contenedor, y el fallo aparecía lejos del origen. La lección fue convertir la configuración en una aserción verificable: las pruebas ahora leen `server.port`, `spring.application.name` y `spring.flyway.locations` desde el `Environment` y fallan si vuelven a ser `null`. Un valor de configuración que nadie verifica es un valor que puede desaparecer sin que nadie lo note. En la misma línea, el módulo de facturación no compilaba porque `jaxb2-maven-plugin` 2.5.0 generaba clases `javax.xml.bind` mientras Spring Boot 4 usa Jakarta; la corrección fue subir a 3.1.0 (XJC Jakarta), no adaptar el código generado a mano.
 
@@ -735,4 +932,4 @@ El BUS ya contempla la ruta pública de descubrimiento: `SecurityConfig` permite
 
 ---
 
-*Documento finalizado el 08/11/2026. Las secciones 1, 2 (incluida §2.6), 3.1, 3.2 y 5 reflejan resultados reales de esa fecha: 115 pruebas automatizadas en verde en los cuatro módulos implementados (127 en el repositorio completo) y 18 casos numerados ejecutados contra el BUS —21 peticiones en la colección Postman— con su petición y respuesta transcritas.*
+*Documento finalizado el 16/11/2026. Todas las secciones reflejan resultados reales de ejecución: 115 pruebas automatizadas en verde en los cuatro módulos implementados (127 en el repositorio completo), 18 casos numerados ejecutados contra el BUS en Postman y escaneo activo de vulnerabilidades con OWASP ZAP 2.17.0 (0 alertas altas, 0 medias, 2 bajas y 2 informativas).*
